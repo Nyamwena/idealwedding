@@ -1,0 +1,28 @@
+{
+  "name": "idealweddings-complete-deployment",
+  "version": "1.0.0",
+  "description": "Ideal Weddings Complete Deployment with Dependencies",
+  "scripts": {
+    "start": "cd frontend && node server.js",
+    "start:frontend": "cd frontend && npm start",
+    "build:frontend": "cd frontend && npm run build",
+    "build:auth": "cd backend/auth-service && npm run build",
+    "build:vendor": "cd backend/vendor-service && npm run build",
+    "build:quote": "cd backend/quote-service && npm run build",
+    "build:guest": "cd backend/guest-service && npm run build",
+    "build:credit": "cd backend/credit-service && npm run build",
+    "build:gateway": "cd backend/api-gateway && npm run build",
+    "build:backend": "npm run build:auth && npm run build:vendor && npm run build:quote && npm run build:guest && npm run build:credit && npm run build:gateway",
+    "build": "npm run build:frontend && npm run build:backend",
+    "start:auth": "cd backend/auth-service && npm start",
+    "start:vendor": "cd backend/vendor-service && npm start",
+    "start:quote": "cd backend/quote-service && npm start",
+    "start:guest": "cd backend/guest-service && npm start",
+    "start:credit": "cd backend/credit-service && npm start",
+    "start:gateway": "cd backend/api-gateway && npm start",
+    "start:backend": "concurrently \"npm run start:auth\" \"npm run start:vendor\" \"npm run start:quote\" \"npm run start:guest\" \"npm run start:credit\" \"npm run start:gateway\""
+  },
+  "dependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

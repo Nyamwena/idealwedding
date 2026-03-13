@@ -1,0 +1,16 @@
+NODE_ENV=development
+PORT=3003
+
+# MySQL Database Configuration
+DATABASE_URL=mysql://idealweddings:idealweddings@localhost:3306/idealweddings
+
+# JWT Configuration (must match auth-service)
+JWT_SECRET=your-super-secret-jwt-key-change-in-production-12345
+JWT_EXPIRES_IN=15m
+
+# Auth Service URL
+AUTH_SERVICE_URL=http://localhost:3002
+
+# Frontend URL
+FRONTEND_URL=http://localhost:3000
+

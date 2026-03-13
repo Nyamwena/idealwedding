@@ -1,0 +1,85 @@
+{
+  "bannerAds": [
+    {
+      "id": "a1759780400878",
+      "title": "Salgo Ad",
+      "imageUrl": "https://salgo.shop/img/logo-small.png",
+      "targetUrl": "https://salgo.shop/img/logo-small.png",
+      "position": "top",
+      "status": "active",
+      "startDate": "2025-10-06",
+      "endDate": "2025-10-10",
+      "cost": 10,
+      "advertiser": "Salgo New",
+      "category": "Photography",
+      "clicks": 0,
+      "impressions": 0,
+      "ctr": 0,
+      "createdAt": "2025-10-06T19:53:20.878Z",
+      "updatedAt": "2025-10-06T19:53:20.878Z"
+    },
+    {
+      "id": "a1",
+      "title": "Wedding Photography Special",
+      "imageUrl": "/images/ads/photography-ad.jpg",
+      "targetUrl": "https://example.com/photography",
+      "position": "top",
+      "status": "inactive",
+      "startDate": "2024-01-01",
+      "endDate": "2024-12-31",
+      "clicks": 1250,
+      "impressions": 15000,
+      "ctr": 8.33,
+      "cost": 500,
+      "advertiser": "Perfect Moments Photography",
+      "category": "Photography",
+      "updatedAt": "2025-10-06T19:24:13.645Z"
+    },
+    {
+      "id": "a2",
+      "title": "Floral Arrangements",
+      "imageUrl": "/images/ads/floral-ad.jpg",
+      "targetUrl": "https://example.com/florals",
+      "position": "sidebar",
+      "status": "active",
+      "startDate": "2024-01-01",
+      "endDate": "2024-12-31",
+      "clicks": 890,
+      "impressions": 12000,
+      "ctr": 7.42,
+      "cost": 350,
+      "advertiser": "Bloom & Blossom",
+      "category": "Floral"
+    },
+    {
+      "id": "a3",
+      "title": "Wedding Venue Showcase",
+      "imageUrl": "/images/ads/venue-ad.jpg",
+      "targetUrl": "https://example.com/venues",
+      "position": "bottom",
+      "status": "scheduled",
+      "startDate": "2024-02-01",
+      "endDate": "2024-12-31",
+      "clicks": 0,
+      "impressions": 0,
+      "ctr": 0,
+      "cost": 750,
+      "advertiser": "Grand Venues",
+      "category": "Venues"
+    }
+  ],
+  "adSenseConfig": {
+    "enabled": true,
+    "clientId": "ca-pub-1234567890123456",
+    "adSlots": {
+      "header": "1234567890",
+      "sidebar": "0987654321",
+      "footer": "1122334455",
+      "content": "5566778899"
+    },
+    "revenue": 1250.75,
+    "impressions": 45000,
+    "clicks": 2250,
+    "lastUpdated": "2024-01-01T00:00:00.000Z"
+  }
+}

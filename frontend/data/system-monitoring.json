@@ -1,0 +1,95 @@
+{
+  "lastUpdated": "2024-01-01T00:00:00.000Z",
+  "systemHealth": {
+    "apiGateway": { "status": "healthy", "uptime": 99.9 },
+    "database": { "status": "healthy", "uptime": 99.8 },
+    "paymentService": { "status": "warning", "uptime": 98.5 },
+    "emailService": { "status": "healthy", "uptime": 99.7 }
+  },
+  "metrics": {
+    "activeVendors": 45,
+    "activeUsers": 120,
+    "creditsUsedToday": 150,
+    "leadsGenerated": 35,
+    "systemUptime": 99.8,
+    "responseTime": 245
+  },
+  "vendorActivities": [
+    {
+      "id": "va1",
+      "vendorName": "Perfect Moments Photography",
+      "action": "Updated portfolio",
+      "timestamp": "2024-01-01T10:30:00.000Z",
+      "details": "Added 15 new wedding photos",
+      "impact": "medium"
+    },
+    {
+      "id": "va2",
+      "vendorName": "Bloom & Blossom",
+      "action": "New booking received",
+      "timestamp": "2024-01-01T09:15:00.000Z",
+      "details": "Wedding floral arrangement for March 15th",
+      "impact": "high"
+    },
+    {
+      "id": "va3",
+      "vendorName": "Grand Venues",
+      "action": "Availability updated",
+      "timestamp": "2024-01-01T08:45:00.000Z",
+      "details": "Updated venue availability for Q2 2024",
+      "impact": "low"
+    }
+  ],
+  "creditUsage": [
+    {
+      "vendorId": "v1",
+      "vendorName": "Perfect Moments Photography",
+      "creditsUsed": 45,
+      "creditsRemaining": 55,
+      "usagePercentage": 45,
+      "lastUsed": "2024-01-01T10:30:00.000Z"
+    },
+    {
+      "vendorId": "v2",
+      "vendorName": "Bloom & Blossom",
+      "creditsUsed": 78,
+      "creditsRemaining": 22,
+      "usagePercentage": 78,
+      "lastUsed": "2024-01-01T09:15:00.000Z"
+    },
+    {
+      "vendorId": "v3",
+      "vendorName": "Grand Venues",
+      "creditsUsed": 92,
+      "creditsRemaining": 8,
+      "usagePercentage": 92,
+      "lastUsed": "2024-01-01T08:45:00.000Z"
+    }
+  ],
+  "leadGeneration": [
+    {
+      "vendorId": "v1",
+      "vendorName": "Perfect Moments Photography",
+      "leadsGenerated": 25,
+      "conversionRate": 68,
+      "revenue": 12500,
+      "period": "Last 30 days"
+    },
+    {
+      "vendorId": "v2",
+      "vendorName": "Bloom & Blossom",
+      "leadsGenerated": 18,
+      "conversionRate": 72,
+      "revenue": 8900,
+      "period": "Last 30 days"
+    },
+    {
+      "vendorId": "v3",
+      "vendorName": "Grand Venues",
+      "leadsGenerated": 32,
+      "conversionRate": 58,
+      "revenue": 15600,
+      "period": "Last 30 days"
+    }
+  ]
+} 

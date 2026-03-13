@@ -1,0 +1,62 @@
+[
+  {
+    "id": "payment_001",
+    "vendorId": "vendor_001",
+    "bookingId": "booking_001",
+    "customerId": "customer_001",
+    "customerName": "Sarah & John",
+    "amount": 2500,
+    "status": "completed",
+    "paymentMethod": "credit_card",
+    "commission": 250,
+    "vendorAmount": 2250,
+    "description": "Full Day Wedding Photography - Deposit",
+    "createdAt": "2024-09-24T10:30:00Z",
+    "updatedAt": "2024-09-24T10:30:00Z"
+  },
+  {
+    "id": "payment_002",
+    "vendorId": "vendor_001",
+    "bookingId": "booking_002",
+    "customerId": "customer_002",
+    "customerName": "Amanda & Robert",
+    "amount": 1800,
+    "status": "completed",
+    "paymentMethod": "bank_transfer",
+    "commission": 180,
+    "vendorAmount": 1620,
+    "description": "Beach Wedding Photography - Deposit",
+    "createdAt": "2024-09-18T14:20:00Z",
+    "updatedAt": "2024-09-18T14:20:00Z"
+  },
+  {
+    "id": "payment_003",
+    "vendorId": "vendor_001",
+    "bookingId": "booking_003",
+    "customerId": "customer_003",
+    "customerName": "Rachel & Tom",
+    "amount": 3200,
+    "status": "completed",
+    "paymentMethod": "credit_card",
+    "commission": 320,
+    "vendorAmount": 2880,
+    "description": "Fall Wedding Photography - Full Payment",
+    "createdAt": "2024-09-10T08:00:00Z",
+    "updatedAt": "2024-10-15T18:00:00Z"
+  },
+  {
+    "id": "payment_004",
+    "vendorId": "vendor_001",
+    "bookingId": "booking_004",
+    "customerId": "customer_004",
+    "customerName": "Maria & Carlos",
+    "amount": 2800,
+    "status": "pending",
+    "paymentMethod": "credit_card",
+    "commission": 280,
+    "vendorAmount": 2520,
+    "description": "Wedding Videography Package - Deposit",
+    "createdAt": "2024-09-05T12:30:00Z",
+    "updatedAt": "2024-09-05T12:30:00Z"
+  }
+] 

@@ -1,0 +1,289 @@
+{
+  "vendorPerformance": [
+    {
+      "vendorId": "v1",
+      "vendorName": "Perfect Moments Photography",
+      "category": "Photography",
+      "totalLeads": 45,
+      "totalQuotes": 32,
+      "totalBookings": 18,
+      "conversionRate": 56.3,
+      "revenue": 12500,
+      "creditsUsed": 180,
+      "rating": 4.8,
+      "performance": "excellent"
+    },
+    {
+      "vendorId": "v2",
+      "vendorName": "Bloom & Blossom",
+      "category": "Floral",
+      "totalLeads": 38,
+      "totalQuotes": 28,
+      "totalBookings": 15,
+      "conversionRate": 53.6,
+      "revenue": 8900,
+      "creditsUsed": 150,
+      "rating": 4.6,
+      "performance": "good"
+    },
+    {
+      "vendorId": "v3",
+      "vendorName": "Grand Venues",
+      "category": "Venues",
+      "totalLeads": 52,
+      "totalQuotes": 35,
+      "totalBookings": 22,
+      "conversionRate": 62.9,
+      "revenue": 15600,
+      "creditsUsed": 220,
+      "rating": 4.7,
+      "performance": "excellent"
+    },
+    {
+      "vendorId": "v4",
+      "vendorName": "Elegant Catering",
+      "category": "Catering",
+      "totalLeads": 28,
+      "totalQuotes": 20,
+      "totalBookings": 12,
+      "conversionRate": 60,
+      "revenue": 9800,
+      "creditsUsed": 120,
+      "rating": 4.4,
+      "performance": "good"
+    },
+    {
+      "vendorId": "v5",
+      "vendorName": "Melody Music",
+      "category": "Entertainment",
+      "totalLeads": 22,
+      "totalQuotes": 15,
+      "totalBookings": 8,
+      "conversionRate": 53.3,
+      "revenue": 6500,
+      "creditsUsed": 90,
+      "rating": 4.2,
+      "performance": "average"
+    }
+  ],
+  "creditConsumption": [
+    {
+      "vendorId": "v1",
+      "vendorName": "Perfect Moments Photography",
+      "category": "Photography",
+      "creditsPurchased": 500,
+      "creditsUsed": 180,
+      "creditsRemaining": 320,
+      "usagePercentage": 36,
+      "avgCreditsPerLead": 4,
+      "lastPurchase": "2024-01-15T00:00:00.000Z",
+      "lastUsed": "2024-01-20T00:00:00.000Z"
+    },
+    {
+      "vendorId": "v2",
+      "vendorName": "Bloom & Blossom",
+      "category": "Floral",
+      "creditsPurchased": 300,
+      "creditsUsed": 150,
+      "creditsRemaining": 150,
+      "usagePercentage": 50,
+      "avgCreditsPerLead": 3.9,
+      "lastPurchase": "2024-01-10T00:00:00.000Z",
+      "lastUsed": "2024-01-19T00:00:00.000Z"
+    },
+    {
+      "vendorId": "v3",
+      "vendorName": "Grand Venues",
+      "category": "Venues",
+      "creditsPurchased": 600,
+      "creditsUsed": 220,
+      "creditsRemaining": 380,
+      "usagePercentage": 37,
+      "avgCreditsPerLead": 4.2,
+      "lastPurchase": "2024-01-12T00:00:00.000Z",
+      "lastUsed": "2024-01-21T00:00:00.000Z"
+    },
+    {
+      "vendorId": "v4",
+      "vendorName": "Elegant Catering",
+      "category": "Catering",
+      "creditsPurchased": 250,
+      "creditsUsed": 120,
+      "creditsRemaining": 130,
+      "usagePercentage": 48,
+      "avgCreditsPerLead": 4.3,
+      "lastPurchase": "2024-01-08T00:00:00.000Z",
+      "lastUsed": "2024-01-18T00:00:00.000Z"
+    },
+    {
+      "vendorId": "v5",
+      "vendorName": "Melody Music",
+      "category": "Entertainment",
+      "creditsPurchased": 200,
+      "creditsUsed": 90,
+      "creditsRemaining": 110,
+      "usagePercentage": 45,
+      "avgCreditsPerLead": 4.1,
+      "lastPurchase": "2024-01-05T00:00:00.000Z",
+      "lastUsed": "2024-01-17T00:00:00.000Z"
+    }
+  ],
+  "topCategories": [
+    {
+      "category": "Photography",
+      "vendorCount": 25,
+      "totalLeads": 180,
+      "totalRevenue": 45000,
+      "avgRating": 4.6,
+      "topVendor": "Perfect Moments Photography",
+      "growthRate": 15.2
+    },
+    {
+      "category": "Venues",
+      "vendorCount": 18,
+      "totalLeads": 165,
+      "totalRevenue": 52000,
+      "avgRating": 4.5,
+      "topVendor": "Grand Venues",
+      "growthRate": 12.8
+    },
+    {
+      "category": "Catering",
+      "vendorCount": 22,
+      "totalLeads": 140,
+      "totalRevenue": 38000,
+      "avgRating": 4.4,
+      "topVendor": "Elegant Catering",
+      "growthRate": 18.5
+    },
+    {
+      "category": "Floral",
+      "vendorCount": 15,
+      "totalLeads": 120,
+      "totalRevenue": 32000,
+      "avgRating": 4.5,
+      "topVendor": "Bloom & Blossom",
+      "growthRate": 10.3
+    },
+    {
+      "category": "Entertainment",
+      "vendorCount": 12,
+      "totalLeads": 85,
+      "totalRevenue": 25000,
+      "avgRating": 4.3,
+      "topVendor": "Melody Music",
+      "growthRate": 8.7
+    }
+  ],
+  "customQueries": [
+    {
+      "id": "1759777499909",
+      "name": "vendors",
+      "description": "",
+      "category": "vendors",
+      "parameters": {
+        "dateRange": "30d",
+        "vendorCategory": "",
+        "status": "",
+        "minRevenue": 0,
+        "maxRevenue": 100000,
+        "sortBy": "revenue",
+        "limit": 100
+      },
+      "results": [
+        {
+          "id": 1,
+          "name": "Sample undefined Item 1",
+          "category": "Catering",
+          "status": "active",
+          "value": 10760,
+          "date": "2025-09-21T20:21:07.766Z",
+          "rating": 5
+        },
+        {
+          "id": 2,
+          "name": "Sample undefined Item 2",
+          "category": "Photography",
+          "status": "pending",
+          "value": 8615,
+          "date": "2025-10-03T22:19:50.453Z",
+          "rating": 3
+        },
+        {
+          "id": 3,
+          "name": "Sample undefined Item 3",
+          "category": "Florist",
+          "status": "completed",
+          "value": 8196,
+          "date": "2025-09-30T13:52:05.505Z",
+          "rating": 2
+        },
+        {
+          "id": 4,
+          "name": "Sample undefined Item 4",
+          "category": "Venue",
+          "status": "active",
+          "value": 1634,
+          "date": "2025-09-29T02:26:37.071Z",
+          "rating": 4
+        },
+        {
+          "id": 5,
+          "name": "Sample undefined Item 5",
+          "category": "Entertainment",
+          "status": "pending",
+          "value": 10001,
+          "date": "2025-10-01T17:41:55.529Z",
+          "rating": 1
+        },
+        {
+          "id": 6,
+          "name": "Sample undefined Item 6",
+          "category": "Catering",
+          "status": "completed",
+          "value": 8391,
+          "date": "2025-09-16T05:55:34.151Z",
+          "rating": 3
+        },
+        {
+          "id": 7,
+          "name": "Sample undefined Item 7",
+          "category": "Photography",
+          "status": "active",
+          "value": 4263,
+          "date": "2025-09-29T20:09:13.529Z",
+          "rating": 5
+        },
+        {
+          "id": 8,
+          "name": "Sample undefined Item 8",
+          "category": "Florist",
+          "status": "pending",
+          "value": 4891,
+          "date": "2025-09-25T18:48:47.826Z",
+          "rating": 5
+        },
+        {
+          "id": 9,
+          "name": "Sample undefined Item 9",
+          "category": "Venue",
+          "status": "completed",
+          "value": 9169,
+          "date": "2025-09-26T08:10:59.110Z",
+          "rating": 3
+        },
+        {
+          "id": 10,
+          "name": "Sample undefined Item 10",
+          "category": "Entertainment",
+          "status": "active",
+          "value": 10136,
+          "date": "2025-09-09T10:00:39.461Z",
+          "rating": 4
+        }
+      ],
+      "createdAt": "2025-10-06T19:04:59.909Z",
+      "lastRun": "2025-10-06T20:31:15.775Z"
+    }
+  ]
+}

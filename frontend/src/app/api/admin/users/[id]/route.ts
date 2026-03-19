@@ -1,143 +1,117 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readDataFile, writeDataFile } from '@/lib/dataFileStore';
+import { verifyToken } from '@/lib/auth';
 
-// Read users from file
-const getUsers = () => {
-  return readDataFile<any[]>('users.json', []);
-};
+const getUsers = () => readDataFile<any[]>('users.json', []);
+const saveUsers = (users: any[]) => writeDataFile('users.json', users);
 
-// Write users to file
-const saveUsers = (users: any[]) => {
-  return writeDataFile('users.json', users);
-};
+function getAuthToken(request: NextRequest): string | null {
+    const header = request.headers.get('authorization');
+    if (header?.startsWith('Bearer ')) return header.slice(7);
+    return request.cookies.get('accessToken')?.value || null;
+}
 
-// GET /api/admin/users/[id] - Get specific user
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  try {
-    const users = await getUsers();
-    const user = users.find(u => u.id === params.id);
-    
+async function requireAdmin(request: NextRequest): Promise<NextResponse | null> {
+    const token = getAuthToken(request);
+    if (!token) {
+        return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const user = await verifyToken(token);
     if (!user) {
-      return NextResponse.json(
-        { success: false, error: 'User not found' },
-        { status: 404 }
-      );
+        return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
-    
-    return NextResponse.json({
-      success: true,
-      data: user,
-    });
-  } catch (error) {
-    console.error('Error in GET /api/admin/users/[id]:', error);
-    return NextResponse.json(
-      { success: false, error: 'Failed to fetch user' },
-      { status: 500 }
-    );
-  }
+
+    if (user.role.toUpperCase() !== 'ADMIN') {
+        return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+    }
+
+    return null;
 }
 
-// PUT /api/admin/users/[id] - Update specific user
+export async function GET(
+    request: NextRequest,
+    { params }: { params: { id: string } }
+) {
+    try {
+        const authError = await requireAdmin(request);
+        if (authError) return authError;
+
+        const users = await getUsers();
+        const user = users.find(u => u.id === params.id);
+
+        if (!user) {
+            return NextResponse.json({ success: false, error: 'User not found' }, { status: 404 });
+        }
+
+        return NextResponse.json({ success: true, data: user });
+    } catch (error) {
+        console.error('Error in GET /api/admin/users/[id]:', error);
+        return NextResponse.json({ success: false, error: 'Failed to fetch user' }, { status: 500 });
+    }
+}
+
 export async function PUT(
-  request: NextRequest,
-  { params }: { params: { id: string } }
+    request: NextRequest,
+    { params }: { params: { id: string } }
 ) {
-  try {
-    const body = await request.json();
-    const { firstName, lastName, email, phone, role, status } = body;
+    try {
+        const authError = await requireAdmin(request);
+        if (authError) return authError;
 
-    // Validate required fields
-    if (!firstName || !lastName || !email || !phone || !role || !status) {
-      return NextResponse.json(
-        { success: false, error: 'All fields are required' },
-        { status: 400 }
-      );
+        const body = await request.json();
+        const { firstName, lastName, email, phone, role, status } = body;
+
+        if (!firstName || !lastName || !email || !phone || !role || !status) {
+            return NextResponse.json({ success: false, error: 'All fields are required' }, { status: 400 });
+        }
+
+        const users = await getUsers();
+        const userIndex = users.findIndex(u => u.id === params.id);
+
+        if (userIndex === -1) {
+            return NextResponse.json({ success: false, error: 'User not found' }, { status: 404 });
+        }
+
+        const existingUser = users.find(u => u.email === email && u.id !== params.id);
+        if (existingUser) {
+            return NextResponse.json(
+                { success: false, error: 'Email address is already in use by another user' },
+                { status: 409 }
+            );
+        }
+
+        users[userIndex] = { ...users[userIndex], firstName, lastName, email, phone, role, status };
+        await saveUsers(users);
+
+        return NextResponse.json({ success: true, data: users[userIndex], message: 'User updated successfully' });
+    } catch (error) {
+        console.error('Error in PUT /api/admin/users/[id]:', error);
+        return NextResponse.json({ success: false, error: 'Failed to update user' }, { status: 500 });
     }
-
-    const users = await getUsers();
-    const userIndex = users.findIndex(u => u.id === params.id);
-    
-    if (userIndex === -1) {
-      return NextResponse.json(
-        { success: false, error: 'User not found' },
-        { status: 404 }
-      );
-    }
-
-    // Check if email is already used by another user
-    const existingUser = users.find(u => u.email === email && u.id !== params.id);
-    if (existingUser) {
-      return NextResponse.json(
-        { success: false, error: 'Email address is already in use by another user' },
-        { status: 409 }
-      );
-    }
-
-    // Update user
-    users[userIndex] = {
-      ...users[userIndex],
-      firstName,
-      lastName,
-      email,
-      phone,
-      role,
-      status,
-    };
-
-    // Save to file
-    await saveUsers(users);
-
-    return NextResponse.json({
-      success: true,
-      data: users[userIndex],
-      message: 'User updated successfully',
-    });
-
-  } catch (error) {
-    console.error('Error in PUT /api/admin/users/[id]:', error);
-    return NextResponse.json(
-      { success: false, error: 'Failed to update user' },
-      { status: 500 }
-    );
-  }
 }
 
-// DELETE /api/admin/users/[id] - Delete specific user
 export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { id: string } }
+    request: NextRequest,
+    { params }: { params: { id: string } }
 ) {
-  try {
-    const users = await getUsers();
-    const userIndex = users.findIndex(u => u.id === params.id);
-    
-    if (userIndex === -1) {
-      return NextResponse.json(
-        { success: false, error: 'User not found' },
-        { status: 404 }
-      );
+    try {
+        const authError = await requireAdmin(request);
+        if (authError) return authError;
+
+        const users = await getUsers();
+        const userIndex = users.findIndex(u => u.id === params.id);
+
+        if (userIndex === -1) {
+            return NextResponse.json({ success: false, error: 'User not found' }, { status: 404 });
+        }
+
+        const deletedUser = users.splice(userIndex, 1)[0];
+        await saveUsers(users);
+
+        return NextResponse.json({ success: true, data: deletedUser, message: 'User deleted successfully' });
+    } catch (error) {
+        console.error('Error in DELETE /api/admin/users/[id]:', error);
+        return NextResponse.json({ success: false, error: 'Failed to delete user' }, { status: 500 });
     }
-
-    // Remove user from array
-    const deletedUser = users.splice(userIndex, 1)[0];
-
-    // Save to file
-    await saveUsers(users);
-
-    return NextResponse.json({
-      success: true,
-      data: deletedUser,
-      message: 'User deleted successfully',
-    });
-
-  } catch (error) {
-    console.error('Error in DELETE /api/admin/users/[id]:', error);
-    return NextResponse.json(
-      { success: false, error: 'Failed to delete user' },
-      { status: 500 }
-    );
-  }
 }

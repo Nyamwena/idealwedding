@@ -24,10 +24,10 @@ interface CreditTransaction {
 export function useVendorCredits() {
   const { user, isVendor } = useAuth();
   const [creditData, setCreditData] = useState<CreditData>({
-    currentCredits: 150,
-    totalPurchased: 500,
-    totalUsed: 350,
-    lastTopUp: '2024-09-15T00:00:00Z',
+    currentCredits: 0,
+    totalPurchased: 0,
+    totalUsed: 0,
+    lastTopUp: new Date().toISOString(),
     isLowBalance: false,
   });
   const [transactions, setTransactions] = useState<CreditTransaction[]>([]);
@@ -42,48 +42,16 @@ export function useVendorCredits() {
   const fetchCreditData = async () => {
     setLoading(true);
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Mock credit data
-      const mockCreditData: CreditData = {
-        currentCredits: 150,
-        totalPurchased: 500,
-        totalUsed: 350,
-        lastTopUp: '2024-09-15T00:00:00Z',
-        isLowBalance: false,
-      };
+      const response = await fetch('/api/vendor/credits', {
+        credentials: 'include',
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to fetch credit data');
+      }
 
-      const mockTransactions: CreditTransaction[] = [
-        {
-          id: 'txn_001',
-          type: 'purchase',
-          amount: 100,
-          description: 'Credit package purchase',
-          timestamp: '2024-09-15T00:00:00Z',
-        },
-        {
-          id: 'txn_002',
-          type: 'usage',
-          amount: -5,
-          description: 'Lead received from Sarah & John - Photography',
-          timestamp: '2024-09-24T10:30:00Z',
-          leadId: 'lead_001',
-          coupleName: 'Sarah & John',
-        },
-        {
-          id: 'txn_003',
-          type: 'usage',
-          amount: -5,
-          description: 'Lead received from Emily & Michael - Wedding Planning',
-          timestamp: '2024-09-24T09:15:00Z',
-          leadId: 'lead_002',
-          coupleName: 'Emily & Michael',
-        },
-      ];
-
-      setCreditData(mockCreditData);
-      setTransactions(mockTransactions);
+      setCreditData(result.data);
+      setTransactions(result.transactions || []);
     } catch (error) {
       console.error('Failed to fetch credit data:', error);
     } finally {
@@ -93,27 +61,21 @@ export function useVendorCredits() {
 
   const purchaseCredits = async (amount: number) => {
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      const newTransaction: CreditTransaction = {
-        id: `txn_${Date.now()}`,
-        type: 'purchase',
-        amount: amount,
-        description: `Credit package purchase`,
-        timestamp: new Date().toISOString(),
-      };
-
-      setCreditData(prev => ({
-        ...prev,
-        currentCredits: prev.currentCredits + amount,
-        totalPurchased: prev.totalPurchased + amount,
-        lastTopUp: new Date().toISOString(),
-        isLowBalance: (prev.currentCredits + amount) < 50,
-      }));
-
-      setTransactions(prev => [newTransaction, ...prev]);
-
+      const response = await fetch('/api/vendor/credits', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          action: 'purchase',
+          amount,
+          description: 'Credit package purchase',
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to purchase credits');
+      }
+      await fetchCreditData();
       return true;
     } catch (error) {
       console.error('Failed to purchase credits:', error);
@@ -123,32 +85,24 @@ export function useVendorCredits() {
 
   const deductCredits = async (amount: number, description: string, leadId?: string, coupleName?: string) => {
     try {
-      if (creditData.currentCredits < amount) {
+      const response = await fetch('/api/vendor/credits', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          action: 'deduct',
+          amount,
+          description,
+          referenceId: leadId,
+          coupleName,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
         return false;
       }
-
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      const newTransaction: CreditTransaction = {
-        id: `txn_${Date.now()}`,
-        type: 'usage',
-        amount: -amount,
-        description: description,
-        timestamp: new Date().toISOString(),
-        leadId,
-        coupleName,
-      };
-
-      setCreditData(prev => ({
-        ...prev,
-        currentCredits: prev.currentCredits - amount,
-        totalUsed: prev.totalUsed + amount,
-        isLowBalance: (prev.currentCredits - amount) < 50,
-      }));
-
-      setTransactions(prev => [newTransaction, ...prev]);
-
+      setCreditData(result.data);
+      await fetchCreditData();
       return true;
     } catch (error) {
       console.error('Failed to deduct credits:', error);

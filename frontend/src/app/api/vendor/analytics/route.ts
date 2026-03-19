@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import jwt from 'jsonwebtoken';
 import { readDataFile } from '@/lib/dataFileStore';
 
 // Helper to read vendor leads from file
@@ -23,12 +24,42 @@ const getPayments = () => {
 
 export const dynamic = "force-dynamic";
 
+function getToken(request: NextRequest): string | null {
+  const header = request.headers.get('authorization');
+  if (header?.startsWith('Bearer ')) return header.slice(7);
+  return request.cookies.get('token')?.value || null;
+}
+
+function getVendorUserId(request: NextRequest): string | null {
+  const token = getToken(request);
+  if (!token || !process.env.JWT_SECRET) return null;
+  try {
+    const payload = jwt.verify(token, process.env.JWT_SECRET) as {
+      userId?: string | number;
+      role?: string;
+    };
+    const role = String(payload.role || '').toUpperCase();
+    if (!payload.userId || role !== 'VENDOR') return null;
+    return String(payload.userId);
+  } catch {
+    return null;
+  }
+}
+
 // GET /api/vendor/analytics - Get vendor analytics data
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const period = searchParams.get('period') || '30d';
-    const vendorId = 'vendor_001'; // Mock vendor ID - in real app, get from auth
+    const vendorUserId = getVendorUserId(request);
+    if (!vendorUserId) {
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized vendor access' },
+        { status: 401 }
+      );
+    }
+
+    const vendorId = `vendor_${vendorUserId}`;
 
     // Get all data
     const [allLeads, allBookings, allPayments, vendorProfiles] = await Promise.all([
@@ -39,7 +70,11 @@ export async function GET(request: NextRequest) {
     ]);
 
     // Filter data for this vendor
-    const vendorLeads = allLeads.filter((lead: any) => lead.vendorId === vendorId);
+    const vendorLeads = allLeads.filter(
+      (lead: any) =>
+        String(lead.vendorUserId || '') === vendorUserId ||
+        String(lead.vendorId || '') === vendorId
+    );
     const vendorBookings = allBookings.filter((booking: any) => booking.vendorId === vendorId);
     const vendorPayments = allPayments.filter((payment: any) => payment.vendorId === vendorId);
 
@@ -120,7 +155,9 @@ export async function GET(request: NextRequest) {
     const revenueGrowth = previousRevenue > 0 ? ((totalRevenue - previousRevenue) / previousRevenue) * 100 : 0;
 
     // Calculate category performance
-    const vendorProfile = vendorProfiles.find((p: any) => p.id === vendorId);
+    const vendorProfile = vendorProfiles.find(
+      (p: any) => String(p.userId || '') === vendorUserId || p.id === vendorId
+    );
     const categoryPerformance = vendorProfile?.services?.map((service: any) => {
       const serviceLeads = filteredLeads.filter((lead: any) => 
         lead.serviceCategory === service.category

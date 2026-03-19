@@ -1,49 +1,25 @@
-import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import jwt from "jsonwebtoken";
-import { prisma } from "@/lib/prisma";
+// COPY TO: frontend/src/app/api/auth/me/route.ts
 
-export async function GET() {
+import { NextRequest, NextResponse } from 'next/server';
+import { verifyToken } from '@/lib/auth';
+
+export async function GET(request: NextRequest) {
     try {
-        const cookieStore = cookies();
-        const token = cookieStore.get("token")?.value;
+        const accessToken = request.cookies.get('accessToken')?.value;
 
-        if (!token) {
-            return NextResponse.json(
-                { message: "Not authenticated" },
-                { status: 401 }
-            );
+        if (!accessToken) {
+            return NextResponse.json({ message: 'Not authenticated' }, { status: 401 });
         }
 
-        const decoded = jwt.verify(
-            token,
-            process.env.JWT_SECRET!
-        ) as { userId: number };
-
-        const user = await prisma.user.findUnique({
-            where: { id: decoded.userId },
-            select: {
-                id: true,
-                email: true,
-                firstName: true,
-                lastName: true,
-                role: true,
-            },
-        });
+        const user = await verifyToken(accessToken);
 
         if (!user) {
-            return NextResponse.json(
-                { message: "User not found" },
-                { status: 401 }
-            );
+            return NextResponse.json({ message: 'Invalid or expired token' }, { status: 401 });
         }
 
-        return NextResponse.json(user);
-
+        return NextResponse.json(user, { status: 200 });
     } catch (error) {
-        return NextResponse.json(
-            { message: "Invalid token" },
-            { status: 401 }
-        );
+        console.error('[Me Route Error]', error);
+        return NextResponse.json({ message: 'Internal server error' }, { status: 500 });
     }
 }

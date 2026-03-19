@@ -50,7 +50,7 @@ export async function PUT(req: Request, { params }: Params) {
         }
 
         const token = authHeader.split(" ")[1];
-        const decoded = verifyToken(token);
+        const decoded = await verifyToken(token);
 
         if (!decoded || decoded.role !== "ADMIN") {
             return NextResponse.json(
@@ -89,7 +89,7 @@ export async function DELETE(req: Request, { params }: Params) {
         }
 
         const token = authHeader.split(" ")[1];
-        const decoded = verifyToken(token);
+        const decoded = await verifyToken(token);
 
         if (!decoded || decoded.role !== "ADMIN") {
             return NextResponse.json(

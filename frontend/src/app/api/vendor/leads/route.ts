@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import jwt from 'jsonwebtoken';
 import { readDataFile, writeDataFile } from '@/lib/dataFileStore';
 
 const defaultData = [
@@ -88,13 +89,68 @@ async function readLeads() {
   return readDataFile<any[]>('vendor-leads.json', defaultData);
 }
 
+async function readWallets() {
+  return readDataFile<any[]>('vendor-credit-wallets.json', []);
+}
+
+async function writeWallets(wallets: any[]) {
+  await writeDataFile('vendor-credit-wallets.json', wallets);
+}
+
+async function readTransactions() {
+  return readDataFile<any[]>('vendor-credit-transactions.json', []);
+}
+
+async function writeTransactions(transactions: any[]) {
+  await writeDataFile('vendor-credit-transactions.json', transactions);
+}
+
+async function readVendors() {
+  return readDataFile<any[]>('vendors.json', []);
+}
+
+async function writeVendors(vendors: any[]) {
+  await writeDataFile('vendors.json', vendors);
+}
+
+function getToken(request: NextRequest): string | null {
+  const header = request.headers.get('authorization');
+  if (header?.startsWith('Bearer ')) return header.slice(7);
+  return request.cookies.get('token')?.value || null;
+}
+
+function getVendorUserId(request: NextRequest): string | null {
+  const token = getToken(request);
+  if (!token || !process.env.JWT_SECRET) return null;
+  try {
+    const payload = jwt.verify(token, process.env.JWT_SECRET) as {
+      userId?: string | number;
+      role?: string;
+    };
+    const role = String(payload.role || '').toUpperCase();
+    if (!payload.userId || role !== 'VENDOR') return null;
+    return String(payload.userId);
+  } catch {
+    return null;
+  }
+}
+
 export async function GET(request: NextRequest) {
   try {
+    const vendorUserId = getVendorUserId(request);
+    if (!vendorUserId) {
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized vendor access' },
+        { status: 401 }
+      );
+    }
+
     const data = await readLeads();
+    const scoped = data.filter((lead: any) => String(lead.vendorUserId || '') === vendorUserId);
     
     return NextResponse.json({
       success: true,
-      data: data
+      data: scoped
     });
   } catch (error) {
     console.error('Error reading vendor leads:', error);
@@ -105,14 +161,147 @@ export async function GET(request: NextRequest) {
   }
 }
 
+export async function POST(request: NextRequest) {
+  try {
+    const vendorUserId = getVendorUserId(request);
+    if (!vendorUserId) {
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized vendor access' },
+        { status: 401 }
+      );
+    }
+
+    const body = await request.json();
+    const data = await readLeads();
+    const creditsRequired =
+      typeof body.creditsUsed === 'number' && body.creditsUsed > 0 ? body.creditsUsed : 5;
+
+    const wallets = await readWallets();
+    const vendorId = `vendor_${vendorUserId}`;
+    let walletIndex = wallets.findIndex(
+      (w: any) =>
+        String(w.vendorUserId || '') === vendorUserId ||
+        String(w.vendorId || '') === vendorId,
+    );
+    if (walletIndex < 0) {
+      wallets.push({
+        key: vendorId,
+        vendorId,
+        vendorUserId,
+        currentCredits: 0,
+        totalPurchased: 0,
+        totalUsed: 0,
+        lastTopUp: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+      walletIndex = wallets.length - 1;
+    }
+
+    const wallet = wallets[walletIndex];
+    if (Number(wallet.currentCredits || 0) < creditsRequired) {
+      return NextResponse.json(
+        { success: false, error: 'Insufficient credits' },
+        { status: 400 },
+      );
+    }
+
+    const created = {
+      id: body.id || `lead_${Date.now()}`,
+      coupleName: body.coupleName || 'Unknown Couple',
+      coupleEmail: body.coupleEmail || '',
+      couplePhone: body.couplePhone || '',
+      weddingDate: body.weddingDate || '',
+      location: body.location || '',
+      serviceCategory: body.serviceCategory || '',
+      budget: typeof body.budget === 'number' ? body.budget : Number(body.budget || 0),
+      description: body.description || '',
+      timestamp: body.timestamp || new Date().toISOString(),
+      status: body.status || 'new',
+      referralTag: body.referralTag || `REF-${Date.now()}`,
+      creditsUsed: creditsRequired,
+      responseDeadline:
+        body.responseDeadline ||
+        new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(),
+      vendorUserId,
+      vendorId,
+    };
+
+    wallet.currentCredits = Number(wallet.currentCredits || 0) - creditsRequired;
+    wallet.totalUsed = Number(wallet.totalUsed || 0) + creditsRequired;
+    wallet.updatedAt = new Date().toISOString();
+    wallets[walletIndex] = wallet;
+
+    const transactions = await readTransactions();
+    transactions.push({
+      id: `tx_${Date.now()}`,
+      key: wallet.key || vendorId,
+      vendorId,
+      vendorUserId,
+      type: 'usage',
+      amount: -creditsRequired,
+      description: `Lead received from ${created.coupleName} - ${created.serviceCategory}`,
+      timestamp: new Date().toISOString(),
+      referenceId: created.id,
+      source: 'lead_create',
+    });
+
+    data.push(created);
+    await Promise.all([
+      writeDataFile('vendor-leads.json', data),
+      writeWallets(wallets),
+      writeTransactions(transactions),
+    ]);
+
+    const vendors = await readVendors();
+    let vendorChanged = false;
+    for (let i = 0; i < vendors.length; i += 1) {
+      if (
+        String(vendors[i].id || '') === vendorId ||
+        String(vendors[i].email || '').toLowerCase() === String(wallet.email || '').toLowerCase()
+      ) {
+        vendors[i] = { ...vendors[i], credits: wallet.currentCredits };
+        vendorChanged = true;
+      }
+    }
+    if (vendorChanged) {
+      await writeVendors(vendors);
+    }
+
+    return NextResponse.json(
+      {
+        success: true,
+        data: created,
+        message: 'Lead created successfully',
+      },
+      { status: 201 }
+    );
+  } catch (error) {
+    console.error('Error creating vendor lead:', error);
+    return NextResponse.json(
+      { success: false, error: 'Failed to create vendor lead' },
+      { status: 500 }
+    );
+  }
+}
+
 export async function PUT(request: NextRequest) {
   try {
+    const vendorUserId = getVendorUserId(request);
+    if (!vendorUserId) {
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized vendor access' },
+        { status: 401 }
+      );
+    }
+
     const body = await request.json();
     const { leadId, status } = body;
     const data = await readLeads();
     
     // Find and update the lead
-    const leadIndex = data.findIndex((lead: any) => lead.id === leadId);
+    const leadIndex = data.findIndex(
+      (lead: any) => lead.id === leadId && String(lead.vendorUserId || '') === vendorUserId
+    );
     if (leadIndex !== -1) {
       data[leadIndex].status = status;
       

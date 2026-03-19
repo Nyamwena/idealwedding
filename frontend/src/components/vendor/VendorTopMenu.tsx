@@ -13,6 +13,7 @@ export function VendorTopMenu() {
     { href: '/vendor/quotes', label: 'Quotes', icon: '💰' },
     { href: '/vendor/services', label: 'Services', icon: '🛠️' },
     { href: '/vendor/analytics', label: 'Analytics', icon: '📊' },
+    { href: '/vendor/ads', label: 'Ads', icon: '📢' },
     { href: '/vendor/billing', label: 'Billing', icon: '💳' },
     { href: '/vendor/profile', label: 'Profile', icon: '👤' },
   ];

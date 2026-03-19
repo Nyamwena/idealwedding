@@ -33,7 +33,7 @@ interface LeadStats {
 
 export function useVendorLeads() {
   const { user, isVendor } = useAuth();
-  const { deductCredits, canReceiveLead } = useVendorCredits();
+  const { canReceiveLead } = useVendorCredits();
   const [leads, setLeads] = useState<VendorLead[]>([]);
   const [stats, setStats] = useState<LeadStats>({
     totalLeads: 0,
@@ -139,8 +139,7 @@ export function useVendorLeads() {
 
     try {
       // Simulate receiving a new lead
-      const newLead: VendorLead = {
-        id: `lead_${Date.now()}`,
+      const newLeadPayload = {
         coupleName: 'New Couple',
         coupleEmail: 'new.couple@email.com',
         couplePhone: '+1 (555) 999-0000',
@@ -156,31 +155,32 @@ export function useVendorLeads() {
         responseDeadline: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(), // 48 hours
       };
 
-      // Deduct credits
-      const creditDeducted = await deductCredits(
-        5,
-        `Lead received from ${newLead.coupleName} - ${newLead.serviceCategory}`,
-        newLead.id,
-        newLead.coupleName
-      );
-
-      if (creditDeducted) {
-        setLeads(prev => [newLead, ...prev]);
-        
-        // Update stats
-        setStats(prev => ({
-          ...prev,
-          totalLeads: prev.totalLeads + 1,
-          newLeads: prev.newLeads + 1,
-        }));
-
-        // Send notification (simulate)
-        sendLeadNotification(newLead);
-        
-        return true;
+      const response = await fetch('/api/vendor/leads', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(newLeadPayload),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        return false;
       }
+
+      const persistedLead: VendorLead = result.data;
+      setLeads(prev => [persistedLead, ...prev]);
       
-      return false;
+      // Update stats
+      setStats(prev => ({
+        ...prev,
+        totalLeads: prev.totalLeads + 1,
+        newLeads: prev.newLeads + 1,
+      }));
+
+      // Send notification (simulate)
+      sendLeadNotification(persistedLead);
+      
+      return true;
     } catch (error) {
       console.error('Failed to simulate new lead:', error);
       return false;

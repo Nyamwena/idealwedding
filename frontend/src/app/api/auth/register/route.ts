@@ -1,75 +1,66 @@
-import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
+// COPY TO: frontend/src/app/api/auth/register/route.ts
 
-export async function POST(req: Request) {
+import { NextRequest, NextResponse } from 'next/server';
+
+const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'https://api-auth.idealweddings.space';
+
+export async function POST(request: NextRequest) {
     try {
-        const { email, password, firstName, lastName, role } = await req.json();
+        const body = await request.json();
+        const { email, password, firstName, lastName, role } = body;
 
         if (!email || !password || !firstName || !lastName) {
             return NextResponse.json(
-                { message: "All fields are required" },
+                { message: 'Email, password, firstName and lastName are required' },
                 { status: 400 }
             );
         }
 
-        const existingUser = await prisma.user.findUnique({
-            where: { email },
+        const response = await fetch(`${AUTH_SERVICE_URL}/api/v1/auth/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password, firstName, lastName, role }),
         });
 
-        if (existingUser) {
+        const json = await response.json();
+
+        if (!response.ok || !json.success) {
             return NextResponse.json(
-                { message: "User already exists" },
-                { status: 400 }
+                { message: json.message || 'Registration failed' },
+                { status: response.status }
             );
         }
 
-        const hashedPassword = await bcrypt.hash(password, 10);
+        const { user, accessToken, refreshToken } = json.data;
 
-        const user = await prisma.user.create({
-            data: {
-                email,
-                password: hashedPassword,
-                firstName,
-                lastName,
-                role: role || "USER", // 👈 allow role from admin
-            },
-        });
+        const nextResponse = NextResponse.json(
+            { message: json.message || 'Registration successful', user },
+            { status: 201 }
+        );
 
-        // Make sure secret exists
-        if (!process.env.JWT_SECRET) {
-            throw new Error("JWT_SECRET not defined");
+        if (accessToken) {
+            nextResponse.cookies.set('accessToken', accessToken, {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: 'lax',
+                maxAge: 60 * 15,
+                path: '/',
+            });
         }
 
-        const token = jwt.sign(
-            {
-                userId: user.id,
-                email: user.email,
-                role: user.role,
-            },
-            process.env.JWT_SECRET,
-            { expiresIn: "7d" }
-        );
+        if (refreshToken) {
+            nextResponse.cookies.set('refreshToken', refreshToken, {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: 'lax',
+                maxAge: 60 * 60 * 24 * 7,
+                path: '/',
+            });
+        }
 
-        return NextResponse.json({
-            message: "User created successfully",
-            token,
-            user: {
-                id: user.id,
-                email: user.email,
-                firstName: user.firstName,
-                lastName: user.lastName,
-                role: user.role,
-            },
-        });
-
+        return nextResponse;
     } catch (error) {
-        console.error("Registration error:", error);
-
-        return NextResponse.json(
-            { message: "Internal server error" },
-            { status: 500 }
-        );
+        console.error('[Register Route Error]', error);
+        return NextResponse.json({ message: 'Internal server error' }, { status: 500 });
     }
 }

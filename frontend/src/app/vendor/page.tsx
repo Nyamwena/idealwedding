@@ -518,6 +518,14 @@ export default function VendorDashboard() {
                 </div>
               </Link>
 
+              <Link href="/vendor/ads">
+                <div className="bg-white rounded-2xl p-6 shadow-lg hover:shadow-xl transition-shadow cursor-pointer">
+                  <div className="text-3xl mb-4">📢</div>
+                  <h3 className="text-lg font-bold text-gray-900 mb-2">Ad Bidding</h3>
+                  <p className="text-gray-600 text-sm">Bid for top ad slots and pay per click from credits</p>
+                </div>
+              </Link>
+
               <Link href="/vendor/settings">
                 <div className="bg-white rounded-2xl p-6 shadow-lg hover:shadow-xl transition-shadow cursor-pointer">
                   <div className="text-3xl mb-4">⚙️</div>

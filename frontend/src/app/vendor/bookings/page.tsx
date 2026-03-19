@@ -44,78 +44,32 @@ export default function VendorBookingsPage() {
   const fetchBookings = async () => {
     setLoading(true);
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Mock booking data
-      const mockBookings: VendorBooking[] = [
-        {
-          id: 'booking_001',
-          coupleName: 'Sarah & John',
-          coupleEmail: 'sarah.john@email.com',
-          couplePhone: '+1 (555) 123-4567',
-          serviceType: 'Wedding Photography',
-          eventDate: '2024-12-15',
-          location: 'New York, NY',
-          status: 'confirmed',
-          amount: 2500,
-          depositPaid: true,
-          finalPaymentDue: '2024-12-01',
-          notes: 'Outdoor ceremony, indoor reception',
-          createdAt: '2024-09-15T10:30:00Z',
-          updatedAt: '2024-09-20T14:20:00Z',
-        },
-        {
-          id: 'booking_002',
-          coupleName: 'Emily & Michael',
-          coupleEmail: 'emily.michael@email.com',
-          couplePhone: '+1 (555) 234-5678',
-          serviceType: 'Wedding Planning',
-          eventDate: '2025-03-20',
-          location: 'Los Angeles, CA',
-          status: 'pending',
-          amount: 5000,
-          depositPaid: false,
-          finalPaymentDue: '2025-02-20',
-          notes: 'Full service planning package',
-          createdAt: '2024-09-24T09:15:00Z',
-          updatedAt: '2024-09-24T09:15:00Z',
-        },
-        {
-          id: 'booking_003',
-          coupleName: 'Jessica & David',
-          coupleEmail: 'jessica.david@email.com',
-          couplePhone: '+1 (555) 345-6789',
-          serviceType: 'Catering Services',
-          eventDate: '2025-01-10',
-          location: 'Chicago, IL',
-          status: 'completed',
-          amount: 3000,
-          depositPaid: true,
-          finalPaymentDue: '2025-01-05',
-          notes: '150 guests, mix of traditional and modern cuisine',
-          createdAt: '2024-08-20T11:45:00Z',
-          updatedAt: '2025-01-10T18:00:00Z',
-        },
-        {
-          id: 'booking_004',
-          coupleName: 'Amanda & Robert',
-          coupleEmail: 'amanda.robert@email.com',
-          couplePhone: '+1 (555) 456-7890',
-          serviceType: 'Floral Arrangements',
-          eventDate: '2024-11-30',
-          location: 'Miami, FL',
-          status: 'confirmed',
-          amount: 1800,
-          depositPaid: true,
-          finalPaymentDue: '2024-11-15',
-          notes: 'Beach wedding, tropical theme',
-          createdAt: '2024-09-18T14:20:00Z',
-          updatedAt: '2024-09-25T16:30:00Z',
-        },
-      ];
+      const response = await fetch('/api/vendor/bookings', {
+        credentials: 'include',
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to fetch bookings');
+      }
 
-      setBookings(mockBookings);
+      const normalized: VendorBooking[] = (result.data || []).map((item: any) => ({
+        id: String(item.id),
+        coupleName: String(item.coupleName || item.customerName || 'Unknown Couple'),
+        coupleEmail: String(item.coupleEmail || item.customerEmail || ''),
+        couplePhone: String(item.couplePhone || item.customerPhone || ''),
+        serviceType: String(item.serviceType || item.serviceName || item.serviceCategory || 'Wedding Service'),
+        eventDate: String(item.eventDate || item.weddingDate || item.createdAt || new Date().toISOString()),
+        location: String(item.location || 'Unknown'),
+        status: (item.status || 'pending') as VendorBooking['status'],
+        amount: Number(item.amount || 0),
+        depositPaid: Boolean(item.depositPaid),
+        finalPaymentDue: String(item.finalPaymentDue || item.updatedAt || new Date().toISOString()),
+        notes: item.notes ? String(item.notes) : undefined,
+        createdAt: String(item.createdAt || new Date().toISOString()),
+        updatedAt: String(item.updatedAt || item.createdAt || new Date().toISOString()),
+      }));
+
+      setBookings(normalized);
     } catch (error) {
       console.error('Failed to fetch bookings:', error);
     } finally {

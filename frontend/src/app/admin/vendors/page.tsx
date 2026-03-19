@@ -185,6 +185,47 @@ export default function AdminVendorsPage() {
     setShowVendorModal(true);
   };
 
+  const handleAddCredits = async (vendor: MockVendor) => {
+    const amountInput = window.prompt(`Add credits to ${vendor.name}. Enter amount:`, '50');
+    if (!amountInput) return;
+    const amount = Number(amountInput);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      alert('Please enter a valid positive credit amount.');
+      return;
+    }
+    const reason = window.prompt('Reason (optional):', 'Admin credit top-up') || 'Admin credit top-up';
+
+    try {
+      setActionLoading(vendor.id);
+      const response = await fetch(`/api/admin/vendors/${vendor.id}/credits`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount, reason }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to add credits');
+      }
+
+      setVendors((prev) =>
+        prev.map((v) =>
+          v.id === vendor.id
+            ? {
+                ...v,
+                credits: result.data?.vendor?.credits ?? v.credits,
+              }
+            : v,
+        ),
+      );
+      setSuccessMessage(`Added ${amount} credits to ${vendor.name}.`);
+      setTimeout(() => setSuccessMessage(null), 3000);
+    } catch (error) {
+      alert(`Failed to add credits: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
 
 
   if (!isAdmin) {
@@ -203,6 +244,9 @@ export default function AdminVendorsPage() {
             <p className="text-gray-600">Manage vendors, view analytics, and control vendor accounts</p>
           </div>
           <div className="flex space-x-3">
+            <Link href="/admin/credits" className="btn-outline">
+              Credit Ledger
+            </Link>
             <Link href="/admin/vendors/new" className="btn-primary">
               + Add Vendor
             </Link>
@@ -345,6 +389,13 @@ export default function AdminVendorsPage() {
                           className="text-primary-600 hover:text-primary-900"
                         >
                           View
+                        </button>
+                        <button
+                          onClick={() => handleAddCredits(vendor)}
+                          disabled={actionLoading === vendor.id}
+                          className={`text-indigo-600 hover:text-indigo-900 ${actionLoading === vendor.id ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        >
+                          {actionLoading === vendor.id ? 'Processing...' : 'Add Credits'}
                         </button>
                         {vendor.status === 'pending' && (
                           <>

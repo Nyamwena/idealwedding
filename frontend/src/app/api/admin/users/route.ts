@@ -1,20 +1,35 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import jwt from 'jsonwebtoken';
+import { verifyToken } from '@/lib/auth';
 
-function getTokenFromCookie(req: Request) {
-    const cookie = req.headers.get('cookie');
-    return cookie?.match(/token=([^;]+)/)?.[1];
+function getAuthToken(request: NextRequest): string | null {
+    const header = request.headers.get('authorization');
+    if (header?.startsWith('Bearer ')) return header.slice(7);
+    return request.cookies.get('accessToken')?.value || null;
 }
 
-export async function GET(req: Request) {
-    try {
-        const token = getTokenFromCookie(req);
-        if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+async function requireAdmin(request: NextRequest): Promise<NextResponse | null> {
+    const token = getAuthToken(request);
+    if (!token) {
+        return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
 
-        const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any;
-        if (decoded.role !== 'ADMIN')
-            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    const user = await verifyToken(token);
+    if (!user) {
+        return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
+    if (user.role.toUpperCase() !== 'ADMIN') {
+        return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+    }
+
+    return null;
+}
+
+export async function GET(request: NextRequest) {
+    try {
+        const authError = await requireAdmin(request);
+        if (authError) return authError;
 
         const users = await prisma.user.findMany({
             orderBy: { createdAt: 'desc' },
@@ -28,9 +43,10 @@ export async function GET(req: Request) {
             },
         });
 
-        return NextResponse.json({ data: users });
+        return NextResponse.json({ success: true, data: users });
 
     } catch (error) {
-        return NextResponse.json({ error: 'Failed to load users' }, { status: 500 });
+        console.error('Error in GET /api/admin/users:', error);
+        return NextResponse.json({ success: false, error: 'Failed to load users' }, { status: 500 });
     }
 }

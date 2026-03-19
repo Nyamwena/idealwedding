@@ -96,36 +96,22 @@ export default function AdminNewUserPage() {
         setSuccessMessage(null);
 
         try {
-            const token = localStorage.getItem("token");
-
-            if (!token) {
-                throw new Error("Authentication required");
-            }
-
             const response = await fetch("/api/auth/register", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    Authorization: `Bearer ${token}`,
                 },
+                credentials: "include",
                 body: JSON.stringify({
                     email: formData.email,
                     password: formData.password,
                     firstName: formData.firstName,
                     lastName: formData.lastName,
-                    role: formData.role.toUpperCase(),
+                    role: formData.role, // already lowercase from the dropdown
                 }),
             });
 
-            const text = await response.text();
-
-            let data;
-            try {
-                data = JSON.parse(text);
-            } catch {
-                console.error("Server returned HTML:", text);
-                throw new Error("Server returned invalid response");
-            }
+            const data = await response.json();
 
             if (!response.ok) {
                 throw new Error(data.message || "Failed to create user");

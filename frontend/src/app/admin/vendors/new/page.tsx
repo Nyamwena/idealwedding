@@ -104,13 +104,14 @@ export default function AdminAddVendorPage() {
     setSuccessMessage(null);
     
     try {
-      const response = await fetch('/api/admin/vendors', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData),
-      });
+        const response = await fetch('/api/admin/vendors', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            credentials: 'include',  // ← add this line
+            body: JSON.stringify(formData),
+        });
       
       if (!response.ok) {
         const result = await response.json();

@@ -66,8 +66,19 @@ interface Vendor {
   };
 }
 
+interface RankedAd {
+  id: string;
+  title: string;
+  imageUrl?: string;
+  targetUrl: string;
+  advertiser: string;
+  category: string;
+  bidPerClick: number;
+}
+
 export default function VendorsPage() {
   const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [topAds, setTopAds] = useState<RankedAd[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
@@ -77,6 +88,23 @@ export default function VendorsPage() {
   useEffect(() => {
     fetchVendors();
   }, [selectedCategory, selectedLocation, searchTerm, priceRange]);
+
+  useEffect(() => {
+    const loadTopAds = async () => {
+      try {
+        const response = await fetch('/api/advertisements?position=top&limit=3');
+        const result = await response.json();
+        if (response.ok) {
+          setTopAds(result.data || []);
+        } else {
+          setTopAds([]);
+        }
+      } catch {
+        setTopAds([]);
+      }
+    };
+    loadTopAds();
+  }, []);
 
   const fetchVendors = async () => {
     setLoading(true);
@@ -110,6 +138,22 @@ export default function VendorsPage() {
 
   const categories = Array.from(new Set(vendors.map(v => v.category)));
   const locations = Array.from(new Set(vendors.map(v => v.location.split(',')[1]?.trim()).filter(Boolean)));
+
+  const handleAdClick = async (ad: RankedAd) => {
+    try {
+      const response = await fetch(`/api/advertisements/${ad.id}/click`, { method: 'POST' });
+      const result = await response.json();
+      if (response.ok && result.data?.targetUrl) {
+        window.open(result.data.targetUrl, '_blank', 'noopener,noreferrer');
+      } else if (ad.targetUrl) {
+        window.open(ad.targetUrl, '_blank', 'noopener,noreferrer');
+      }
+    } catch {
+      if (ad.targetUrl) {
+        window.open(ad.targetUrl, '_blank', 'noopener,noreferrer');
+      }
+    }
+  };
 
   if (loading) {
     return (
@@ -203,6 +247,33 @@ export default function VendorsPage() {
             </div>
           </div>
         </div>
+
+        {topAds.length > 0 && (
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">Top Sponsored Ads</h2>
+            <p className="text-sm text-gray-500 mb-4">
+              Ranked by bid-per-click. Higher bidder appears first.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {topAds.map((ad, index) => (
+                <button
+                  key={ad.id}
+                  onClick={() => handleAdClick(ad)}
+                  className="text-left bg-white rounded-xl shadow hover:shadow-lg transition p-4 border border-gray-100"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded">
+                      Sponsored #{index + 1}
+                    </span>
+                    <span className="text-xs text-gray-500">Bid ${Number(ad.bidPerClick || 0).toFixed(2)}/click</span>
+                  </div>
+                  <h3 className="font-semibold text-gray-900">{ad.title}</h3>
+                  <p className="text-xs text-gray-500">{ad.advertiser} • {ad.category}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Results Count */}
         <div className="mb-6">

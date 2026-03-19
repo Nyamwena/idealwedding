@@ -67,6 +67,12 @@ export function VendorNavigation() {
       description: 'Credits & Billing'
     },
     {
+      label: 'Ads',
+      href: '/vendor/ads',
+      icon: '📢',
+      description: 'Ad Bids & Campaigns'
+    },
+    {
       label: 'Reviews',
       href: '/vendor/reviews',
       icon: '⭐',

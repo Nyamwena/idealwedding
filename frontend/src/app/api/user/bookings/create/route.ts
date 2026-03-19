@@ -37,10 +37,14 @@ export async function POST(request: NextRequest) {
 
     const userId = 'customer_001'; // Mock user ID - in real app, get from auth
 
+    const vendorUserIdMatch = typeof vendorId === 'string' ? vendorId.match(/^vendor_(.+)$/) : null;
+    const vendorUserId = vendorUserIdMatch ? vendorUserIdMatch[1] : undefined;
+
     // Create new booking
     const newBooking = {
       id: `booking_${Date.now()}`,
       vendorId,
+      vendorUserId,
       customerId: userId,
       customerName: customerName || 'Sarah & John',
       customerEmail: customerEmail || 'sarah.john@email.com',

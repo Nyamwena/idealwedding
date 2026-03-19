@@ -1,53 +1,66 @@
-import { NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
-import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
+// COPY TO: frontend/src/app/api/auth/login/route.ts
 
-export async function POST(req: Request) {
+import { NextRequest, NextResponse } from 'next/server';
+
+const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'https://api-auth.idealweddings.space';
+
+export async function POST(request: NextRequest) {
     try {
-        const { email, password } =
-            await req.json();
+        const body = await request.json();
+        const { email, password } = body;
 
-        const user = await prisma.user.findUnique({
-            where: { email },
-        });
-
-        if (!user) {
+        if (!email || !password) {
             return NextResponse.json(
-                { message: 'User not found' },
-                { status: 404 }
+                { message: 'Email and password are required' },
+                { status: 400 }
             );
         }
 
-        const valid = await bcrypt.compare(
-            password,
-            user.password
-        );
+        const response = await fetch(`${AUTH_SERVICE_URL}/api/v1/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password }),
+        });
 
-        if (!valid) {
+        const json = await response.json();
+
+        if (!response.ok || !json.success) {
             return NextResponse.json(
-                { message: 'Invalid credentials' },
-                { status: 401 }
+                { message: json.message || 'Invalid credentials' },
+                { status: response.status }
             );
         }
 
-        const token = jwt.sign(
-            {
-                userId: user.id,
-                email: user.email,
-                role: user.role,
-            },
-            process.env.JWT_SECRET!,
-            { expiresIn: '7d' }
+        const { user, accessToken, refreshToken } = json.data;
+
+        const nextResponse = NextResponse.json(
+            { message: json.message || 'Login successful', user },
+            { status: 200 }
         );
 
-        return NextResponse.json({
-            token,
-        });
-    } catch {
-        return NextResponse.json(
-            { message: 'Server error' },
-            { status: 500 }
-        );
+        if (accessToken) {
+            nextResponse.cookies.set('accessToken', accessToken, {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: 'lax',
+                maxAge: 60 * 15,
+                path: '/',
+            });
+        }
+
+        if (refreshToken) {
+            nextResponse.cookies.set('refreshToken', refreshToken, {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: 'lax',
+                maxAge: 60 * 60 * 24 * 7,
+                path: '/',
+            });
+        }
+
+        return nextResponse;
+    } catch (error) {
+        console.error('[Login Route Error]', error);
+        return NextResponse.json({ message: 'Internal server error' }, { status: 500 });
     }
 }

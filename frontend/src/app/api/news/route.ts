@@ -81,7 +81,7 @@ export async function POST(req: Request) {
         }
 
         const token = authHeader.split(" ")[1];
-        const decoded = verifyToken(token);
+        const decoded = await verifyToken(token);
 
         if (!decoded || decoded.role !== "ADMIN") {
             return NextResponse.json(
@@ -102,7 +102,7 @@ export async function POST(req: Request) {
                 slug,
                 imageUrl,
                 featured: featured || false,
-                authorId: Number(decoded.userId),
+                authorId: Number(decoded.id),
                 categoryId: Number(categoryId),
             },
         });

@@ -1,16 +1,14 @@
+// COPY TO: frontend/src/hooks/useAuth.ts
+
 'use client';
 
-import {
-    createContext,
-    useContext,
-    useEffect,
-    useState,
-} from 'react';
-import { apiFetch } from '@/lib/api';
+import { createContext, useContext, useEffect, useState } from 'react';
 
 interface User {
     id: number;
     email: string;
+    firstName: string;
+    lastName: string;
     role: 'USER' | 'ADMIN' | 'VENDOR';
 }
 
@@ -28,71 +26,72 @@ interface AuthContextType {
         password: string;
         role?: 'USER' | 'ADMIN' | 'VENDOR';
     }) => Promise<User>;
-    logout: () => void;
+    logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-function decodeToken(token: string) {
-    const payload = token.split('.')[1];
-    return JSON.parse(atob(payload));
+async function fetchMe(): Promise<User | null> {
+    try {
+        const res = await fetch('/api/auth/me', { credentials: 'include' });
+        if (res.ok) return await res.json();
+        return null;
+    } catch {
+        return null;
+    }
 }
 
-function setTokenStorage(token: string) {
-    localStorage.setItem('token', token);
-    document.cookie = `token=${token}; path=/; SameSite=Lax`;
+async function tryRefresh(): Promise<boolean> {
+    try {
+        const res = await fetch('/api/auth/refresh', {
+            method: 'POST',
+            credentials: 'include',
+        });
+        return res.ok;
+    } catch {
+        return false;
+    }
 }
 
-export function AuthProvider({
-                                 children,
-                             }: {
-    children: React.ReactNode;
-}) {
+export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
+    const [loading, setLoading] = useState(true);
+
     const isAdmin = user?.role === 'ADMIN';
     const isVendor = user?.role === 'VENDOR';
     const isUser = user?.role === 'USER';
-    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        const token = localStorage.getItem('token');
-
-        if (token) {
+        const restoreSession = async () => {
             try {
-                const decoded = decodeToken(token);
-
-                setUser({
-                    id: decoded.userId,
-                    email: decoded.email,
-                    role: decoded.role,
-                });
+                let currentUser = await fetchMe();
+                if (!currentUser) {
+                    const refreshed = await tryRefresh();
+                    if (refreshed) {
+                        currentUser = await fetchMe();
+                    }
+                }
+                setUser(currentUser);
             } catch {
-                localStorage.removeItem('token');
+                setUser(null);
+            } finally {
+                setLoading(false);
             }
-        }
-
-        setLoading(false);
+        };
+        restoreSession();
     }, []);
 
-    const login = async (email: string, password: string) => {
-        const data = await apiFetch('/auth/login', {
+    const login = async (email: string, password: string): Promise<User> => {
+        const res = await fetch('/api/auth/login', {
             method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
             body: JSON.stringify({ email, password }),
         });
-
-        setTokenStorage(data.token);
-
-        const decoded = decodeToken(data.token);
-
-        const loggedUser = {
-            id: decoded.userId,
-            email: decoded.email,
-            role: decoded.role,
-        };
-
-        setUser(loggedUser);
-
-        return loggedUser;
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Login failed');
+        setUser(data.user);
+        return data.user;
     };
 
     const register = async (payload: {
@@ -101,42 +100,30 @@ export function AuthProvider({
         email: string;
         password: string;
         role?: 'USER' | 'ADMIN' | 'VENDOR';
-    }) => {
-        const data = await apiFetch('/auth/register', {
+    }): Promise<User> => {
+        const res = await fetch('/api/auth/register', {
             method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
             body: JSON.stringify(payload),
         });
-
-        setTokenStorage(data.token);
-        const decoded = decodeToken(data.token);
-        const registeredUser = {
-            id: decoded.userId,
-            email: decoded.email,
-            role: decoded.role,
-        };
-        setUser(registeredUser);
-        return registeredUser;
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Registration failed');
+        setUser(data.user);
+        return data.user;
     };
 
-    const logout = () => {
-        localStorage.removeItem('token');
-        document.cookie =
-            'token=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';
+    const logout = async (): Promise<void> => {
+        await fetch('/api/auth/logout', {
+            method: 'POST',
+            credentials: 'include',
+        }).catch(() => {});
         setUser(null);
     };
 
     return (
         <AuthContext.Provider
-            value={{
-                user,
-                loading,
-                login,
-                register,
-                logout,
-                isAdmin,
-                isVendor,
-                isUser,
-            }}
+            value={{ user, loading, login, register, logout, isAdmin, isVendor, isUser }}
         >
             {children}
         </AuthContext.Provider>
@@ -145,12 +132,6 @@ export function AuthProvider({
 
 export function useAuth() {
     const context = useContext(AuthContext);
-
-    if (!context) {
-        throw new Error(
-            'useAuth must be used inside AuthProvider'
-        );
-    }
-
+    if (!context) throw new Error('useAuth must be used inside AuthProvider');
     return context;
 }

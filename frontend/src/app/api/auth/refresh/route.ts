@@ -1,4 +1,4 @@
-// COPY TO: frontend/src/app/api/auth/login/route.ts
+// COPY TO: frontend/src/app/api/auth/refresh/route.ts
 
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -6,37 +6,33 @@ const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'https://api-auth.ideal
 
 export async function POST(request: NextRequest) {
     try {
-        const body = await request.json();
-        const { email, password } = body;
+        const refreshToken = request.cookies.get('refreshToken')?.value;
 
-        if (!email || !password) {
-            return NextResponse.json(
-                { message: 'Email and password are required' },
-                { status: 400 }
-            );
+        if (!refreshToken) {
+            return NextResponse.json({ message: 'No refresh token found' }, { status: 401 });
         }
 
-        const response = await fetch(`${AUTH_SERVICE_URL}/api/v1/auth/login`, {
+        const response = await fetch(`${AUTH_SERVICE_URL}/api/v1/auth/refresh`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password }),
+            body: JSON.stringify({ refreshToken }),
         });
 
         const json = await response.json();
 
         if (!response.ok || !json.success) {
-            return NextResponse.json(
-                { message: json.message || 'Invalid credentials' },
-                { status: response.status }
+            const nextResponse = NextResponse.json(
+                { message: json.message || 'Session expired, please login again' },
+                { status: 401 }
             );
+            nextResponse.cookies.set('accessToken', '', { maxAge: 0, path: '/' });
+            nextResponse.cookies.set('refreshToken', '', { maxAge: 0, path: '/' });
+            return nextResponse;
         }
 
-        const { user, accessToken, refreshToken } = json.data;
+        const { accessToken, refreshToken: newRefreshToken } = json.data;
 
-        const nextResponse = NextResponse.json(
-            { message: json.message || 'Login successful', user },
-            { status: 200 }
-        );
+        const nextResponse = NextResponse.json({ message: 'Token refreshed' }, { status: 200 });
 
         if (accessToken) {
             nextResponse.cookies.set('accessToken', accessToken, {
@@ -48,8 +44,8 @@ export async function POST(request: NextRequest) {
             });
         }
 
-        if (refreshToken) {
-            nextResponse.cookies.set('refreshToken', refreshToken, {
+        if (newRefreshToken) {
+            nextResponse.cookies.set('refreshToken', newRefreshToken, {
                 httpOnly: true,
                 secure: process.env.NODE_ENV === 'production',
                 sameSite: 'lax',
@@ -60,7 +56,7 @@ export async function POST(request: NextRequest) {
 
         return nextResponse;
     } catch (error) {
-        console.error('[Login Route Error]', error);
+        console.error('[Refresh Route Error]', error);
         return NextResponse.json({ message: 'Internal server error' }, { status: 500 });
     }
 }

@@ -7,10 +7,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => {
-        const databaseUrl = configService.get<string>(
-          'DATABASE_URL',
-          'mysql://root:@127.0.0.1:3306/ideaxrbb_idealweddings',
-        );
+        const databaseUrl = configService.get<string>('DATABASE_URL', 'postgresql://idealweddings:idealweddings123@localhost:5432/idealweddings');
         
         // Parse database URL to determine type
         let config: any = {

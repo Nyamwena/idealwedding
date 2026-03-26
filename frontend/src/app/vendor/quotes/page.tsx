@@ -51,32 +51,77 @@ export default function VendorQuotesPage() {
   const fetchQuotes = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/vendor/quotes', {
-        credentials: 'include',
-      });
-      const result = await response.json();
-      if (!response.ok) {
-        throw new Error(result.error || 'Failed to fetch quotes');
-      }
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Mock quotes data
+      const mockQuotes: VendorQuote[] = [
+        {
+          id: 'quote_001',
+          leadId: 'lead_001',
+          coupleName: 'Sarah & John',
+          coupleEmail: 'sarah.john@email.com',
+          serviceType: 'Wedding Photography',
+          eventDate: '2024-12-15',
+          location: 'New York, NY',
+          status: 'sent',
+          amount: 2500,
+          description: 'Full day wedding photography package including ceremony and reception coverage, edited photos delivered within 4 weeks.',
+          notes: 'Outdoor ceremony, indoor reception. Special request for sunset photos.',
+          createdAt: '2024-09-20T10:30:00Z',
+          sentAt: '2024-09-20T14:20:00Z',
+          expiresAt: '2024-09-27T14:20:00Z',
+        },
+        {
+          id: 'quote_002',
+          leadId: 'lead_002',
+          coupleName: 'Emily & Michael',
+          coupleEmail: 'emily.michael@email.com',
+          serviceType: 'Wedding Planning',
+          eventDate: '2025-03-20',
+          location: 'Los Angeles, CA',
+          status: 'draft',
+          amount: 5000,
+          description: 'Full-service wedding planning package including venue coordination, vendor management, and day-of coordination.',
+          notes: 'Full service planning package. Bride has specific vision for spring garden theme.',
+          createdAt: '2024-09-24T09:15:00Z',
+          expiresAt: '2024-10-01T09:15:00Z',
+        },
+        {
+          id: 'quote_003',
+          leadId: 'lead_003',
+          coupleName: 'Jessica & David',
+          coupleEmail: 'jessica.david@email.com',
+          serviceType: 'Catering Services',
+          eventDate: '2025-01-10',
+          location: 'Chicago, IL',
+          status: 'accepted',
+          amount: 3000,
+          description: 'Catering for 150 guests including appetizers, main course, dessert, and beverages.',
+          notes: '150 guests, mix of traditional and modern cuisine. Some dietary restrictions noted.',
+          createdAt: '2024-09-18T11:45:00Z',
+          sentAt: '2024-09-18T16:30:00Z',
+          expiresAt: '2024-09-25T16:30:00Z',
+        },
+        {
+          id: 'quote_004',
+          leadId: 'lead_004',
+          coupleName: 'Amanda & Robert',
+          coupleEmail: 'amanda.robert@email.com',
+          serviceType: 'Floral Arrangements',
+          eventDate: '2024-11-30',
+          location: 'Miami, FL',
+          status: 'rejected',
+          amount: 1800,
+          description: 'Beach wedding floral arrangements including bridal bouquet, centerpieces, and ceremony arch.',
+          notes: 'Beach wedding, tropical theme preferred. Budget constraints mentioned.',
+          createdAt: '2024-09-15T14:20:00Z',
+          sentAt: '2024-09-15T18:45:00Z',
+          expiresAt: '2024-09-22T18:45:00Z',
+        },
+      ];
 
-      const normalized: VendorQuote[] = (result.data || []).map((item: any) => ({
-        id: String(item.id),
-        leadId: String(item.leadId || ''),
-        coupleName: String(item.coupleName || item.customerName || 'Unknown Couple'),
-        coupleEmail: String(item.coupleEmail || item.customerEmail || ''),
-        serviceType: String(item.serviceType || item.service || 'Wedding Service'),
-        eventDate: String(item.eventDate || item.requestDate || item.createdAt || new Date().toISOString()),
-        location: String(item.location || 'Unknown'),
-        status: (item.status || 'draft') as VendorQuote['status'],
-        amount: Number(item.amount || 0),
-        description: String(item.description || item.message || ''),
-        notes: item.notes ? String(item.notes) : undefined,
-        createdAt: String(item.createdAt || new Date().toISOString()),
-        sentAt: item.sentAt ? String(item.sentAt) : undefined,
-        expiresAt: String(item.expiresAt || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()),
-      }));
-
-      setQuotes(normalized);
+      setQuotes(mockQuotes);
     } catch (error) {
       console.error('Failed to fetch quotes:', error);
     } finally {
@@ -95,37 +140,23 @@ export default function VendorQuotesPage() {
 
   const handleCreateQuote = async () => {
     try {
-      const response = await fetch('/api/vendor/quotes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          leadId: newQuote.leadId,
-          amount: Number(newQuote.amount),
-          description: newQuote.description,
-          notes: newQuote.notes,
-        }),
-      });
-      const result = await response.json();
-      if (!response.ok) {
-        throw new Error(result.error || 'Failed to create quote');
-      }
-
-      const created = result.data;
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
       const newQuoteData: VendorQuote = {
-        id: String(created.id),
-        leadId: String(created.leadId || ''),
-        coupleName: String(created.coupleName || 'Unknown Couple'),
-        coupleEmail: String(created.coupleEmail || ''),
-        serviceType: String(created.serviceType || 'Wedding Service'),
-        eventDate: String(created.eventDate || new Date().toISOString()),
-        location: String(created.location || 'Unknown'),
-        status: (created.status || 'draft') as VendorQuote['status'],
-        amount: Number(created.amount || 0),
-        description: String(created.description || ''),
-        notes: created.notes ? String(created.notes) : undefined,
-        createdAt: String(created.createdAt || new Date().toISOString()),
-        expiresAt: String(created.expiresAt || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()),
+        id: `quote_${Date.now()}`,
+        leadId: newQuote.leadId,
+        coupleName: 'New Couple',
+        coupleEmail: 'new.couple@email.com',
+        serviceType: 'Wedding Photography',
+        eventDate: '2025-06-15',
+        location: 'San Francisco, CA',
+        status: 'draft',
+        amount: parseInt(newQuote.amount),
+        description: newQuote.description,
+        notes: newQuote.notes,
+        createdAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days
       };
 
       setQuotes(prev => [newQuoteData, ...prev]);

@@ -1,44 +1,25 @@
-import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
+// COPY TO: frontend/src/app/api/auth/me/route.ts
 
-const AUTH_SERVICE_URL =
-  process.env.AUTH_SERVICE_URL ||
-  process.env.NEXT_PUBLIC_AUTH_SERVICE_URL ||
-  "http://localhost:3002";
+import { NextRequest, NextResponse } from 'next/server';
+import { verifyToken } from '@/lib/auth';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
     try {
-        const cookieStore = cookies();
-        const token = cookieStore.get("token")?.value;
+        const accessToken = request.cookies.get('accessToken')?.value;
 
-        if (!token) {
-            return NextResponse.json(
-                { message: "Not authenticated" },
-                { status: 401 }
-            );
+        if (!accessToken) {
+            return NextResponse.json({ message: 'Not authenticated' }, { status: 401 });
         }
 
-        const response = await fetch(`${AUTH_SERVICE_URL}/api/v1/users/profile`, {
-            method: "GET",
-            headers: {
-                Authorization: `Bearer ${token}`,
-            },
-        });
+        const user = await verifyToken(accessToken);
 
-        const json = await response.json();
-        if (!response.ok) {
-            return NextResponse.json(
-                { message: json.message || "User not found" },
-                { status: 401 }
-            );
+        if (!user) {
+            return NextResponse.json({ message: 'Invalid or expired token' }, { status: 401 });
         }
 
-        return NextResponse.json(json.data || json);
-
+        return NextResponse.json(user, { status: 200 });
     } catch (error) {
-        return NextResponse.json(
-            { message: "Invalid token" },
-            { status: 401 }
-        );
+        console.error('[Me Route Error]', error);
+        return NextResponse.json({ message: 'Internal server error' }, { status: 500 });
     }
 }

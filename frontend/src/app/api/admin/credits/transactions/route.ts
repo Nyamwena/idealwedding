@@ -1,33 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server';
-import jwt from 'jsonwebtoken';
-import { readDataFile } from '@/lib/dataFileStore';
+import { readDataFile, writeDataFile } from '@/lib/dataFileStore';
+import { verifyToken } from '@/lib/auth';
 
 function getAuthToken(request: NextRequest): string | null {
-  const header = request.headers.get('authorization');
-  if (header?.startsWith('Bearer ')) return header.slice(7);
-  return request.cookies.get('token')?.value || null;
+    const header = request.headers.get('authorization');
+    if (header?.startsWith('Bearer ')) return header.slice(7);
+    return request.cookies.get('accessToken')?.value || null; // ✅ accessToken
 }
-
-function requireAdmin(request: NextRequest): NextResponse | null {
-  const token = getAuthToken(request);
-  if (!token || !process.env.JWT_SECRET) {
-    return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-  }
-  try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET) as { role?: string };
-    const role = String(payload.role || '').toUpperCase();
-    if (role !== 'ADMIN') {
-      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+async function requireAdmin(request: NextRequest): Promise<NextResponse | null> {
+    const token = getAuthToken(request);
+    if (!token) {
+        return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
+
+    const user = await verifyToken(token); // ✅ local JWT decode, no network call
+    if (!user) {
+        return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
+    if (user.role.toUpperCase() !== 'ADMIN') {
+        return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+    }
+
     return null;
-  } catch {
-    return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-  }
 }
 
 export async function GET(request: NextRequest) {
   try {
-    const authError = requireAdmin(request);
+      const authError = await requireAdmin(request);
     if (authError) return authError;
 
     const [transactions, vendors] = await Promise.all([

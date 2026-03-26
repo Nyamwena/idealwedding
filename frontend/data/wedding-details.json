@@ -1,0 +1,22 @@
+[
+  {
+    "userId": "12",
+    "weddingDate": "2026-12-20",
+    "venue": "Riverside Hall",
+    "city": "London",
+    "guestCount": 120,
+    "budget": 25000,
+    "notes": "evening ceremony",
+    "updatedAt": "2026-03-05T15:18:00.521Z"
+  },
+  {
+    "userId": "14",
+    "weddingDate": "2026-12-20",
+    "venue": "Riverside Hall",
+    "city": "London",
+    "guestCount": 120,
+    "budget": 25000,
+    "notes": "flow details",
+    "updatedAt": "2026-03-05T15:24:43.973Z"
+  }
+]

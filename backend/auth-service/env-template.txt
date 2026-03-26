@@ -1,0 +1,24 @@
+# Ideal Weddings Auth Service Configuration
+NODE_ENV=development
+PORT=3002
+
+# Database Configuration
+# PostgreSQL (current - having permission issues)
+# DATABASE_URL=postgresql://idealweddings:idealweddings123@localhost:5432/idealweddings
+
+# MySQL (alternative - need correct password)
+# DATABASE_URL=mysql://root:YOUR_MYSQL_PASSWORD@localhost:3306/idealweddings
+
+# SQLite (temporary for testing - no permissions needed)
+DATABASE_URL=sqlite://./idealweddings.db
+
+# JWT Configuration
+JWT_SECRET=your-super-secret-jwt-key-change-in-production
+JWT_EXPIRES_IN=15m
+
+# Frontend URL
+FRONTEND_URL=http://localhost:3000
+
+# Email Configuration (optional)
+# SENDGRID_API_KEY=your-sendgrid-api-key
+# FROM_EMAIL=noreply@idealweddings.com

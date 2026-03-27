@@ -74,7 +74,8 @@ export async function POST(
     const walletIndex = wallets.findIndex(
       (w: any) =>
         String(w.vendorUserId || '') === String(ad.vendorUserId || '') ||
-        String(w.vendorId || '') === String(ad.vendorId || ''),
+        String(w.vendorId || '') === String(ad.vendorId || '') ||
+        String(w.email || '').toLowerCase() === String(ad.advertiserEmail || '').toLowerCase(),
     );
     if (walletIndex < 0 || Number(wallets[walletIndex].currentCredits || 0) < clickCost) {
       return NextResponse.json(

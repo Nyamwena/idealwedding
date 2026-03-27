@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 import Link from 'next/link';
+import { AdminPagination } from '@/components/admin/AdminPagination';
 
 interface MockBooking {
   id: string;
@@ -31,6 +32,8 @@ export default function AdminBookingsPage() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [selectedBooking, setSelectedBooking] = useState<MockBooking | null>(null);
   const [showBookingModal, setShowBookingModal] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   useEffect(() => {
     if ( !isAdmin) {
@@ -179,6 +182,20 @@ export default function AdminBookingsPage() {
       (serviceFilter === 'all' || b.serviceType === serviceFilter)
   );
 
+  const totalPages = Math.max(1, Math.ceil(filteredBookings.length / itemsPerPage));
+  const paginatedBookings = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredBookings.slice(start, start + itemsPerPage);
+  }, [filteredBookings, currentPage, itemsPerPage]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, statusFilter, serviceFilter, itemsPerPage]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [currentPage, totalPages]);
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'confirmed': return 'bg-green-100 text-green-800';
@@ -283,7 +300,7 @@ export default function AdminBookingsPage() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {filteredBookings.map((b) => (
+                {paginatedBookings.map((b) => (
                   <tr key={b.id}>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div>
@@ -355,6 +372,20 @@ export default function AdminBookingsPage() {
               </tbody>
             </table>
           </div>
+          <AdminPagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={filteredBookings.length}
+            itemsPerPage={itemsPerPage}
+            onPageChange={(page) => {
+              if (page < 1 || page > totalPages) return;
+              setCurrentPage(page);
+            }}
+            onItemsPerPageChange={(items) => {
+              setItemsPerPage(items);
+              setCurrentPage(1);
+            }}
+          />
         </div>
       </main>
       <Footer />

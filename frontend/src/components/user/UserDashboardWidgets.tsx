@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useUserData, WeddingDetails, BudgetItem, SelectedVendor, Guest } from '@/hooks/useUserData';
 import { useQuoteGenerator, QuoteRequest, QuoteResponse } from '@/hooks/useQuoteGenerator';
@@ -10,9 +10,21 @@ interface UserDashboardWidgetsProps {
   quoteGenerator: ReturnType<typeof useQuoteGenerator>;
 }
 
+interface RankedAd {
+  id: string;
+  title: string;
+  imageUrl?: string;
+  targetUrl: string;
+  advertiser: string;
+  category: string;
+  bidPerClick?: number;
+  cost?: number;
+}
+
 export function UserDashboardWidgets({ userData, quoteGenerator }: UserDashboardWidgetsProps) {
   const { weddingDetails, budgetItems, selectedVendors, guests } = userData;
   const { quoteRequests, quoteResponses } = quoteGenerator;
+  const [topAds, setTopAds] = useState<RankedAd[]>([]);
 
   // Calculate budget summary
   const totalBudget = budgetItems.reduce((sum, item) => sum + item.allocated, 0);
@@ -27,6 +39,43 @@ export function UserDashboardWidgets({ userData, quoteGenerator }: UserDashboard
   // Calculate quote summary
   const pendingQuotes = quoteRequests.filter(q => q.status === 'pending').length;
   const newResponses = quoteResponses.filter(r => r.status === 'pending').length;
+
+  useEffect(() => {
+    const loadTopAds = async () => {
+      try {
+        // API already ranks by bidPerClick desc; client sort is a safety fallback.
+        const response = await fetch('/api/advertisements?position=top&limit=4');
+        const result = await response.json();
+        if (!response.ok) {
+          setTopAds([]);
+          return;
+        }
+        const ads = Array.isArray(result.data) ? result.data : [];
+        ads.sort(
+          (a: RankedAd, b: RankedAd) =>
+            Number(b.bidPerClick || b.cost || 0) - Number(a.bidPerClick || a.cost || 0)
+        );
+        setTopAds(ads);
+      } catch {
+        setTopAds([]);
+      }
+    };
+    loadTopAds();
+  }, []);
+
+  const handleAdClick = async (ad: RankedAd) => {
+    try {
+      const response = await fetch(`/api/advertisements/${ad.id}/click`, { method: 'POST' });
+      const result = await response.json();
+      if (response.ok && result.data?.targetUrl) {
+        window.open(result.data.targetUrl, '_blank', 'noopener,noreferrer');
+        return;
+      }
+      console.warn('Ad click not opened because billing was not successful.');
+    } catch {
+      console.warn('Ad click not opened due to click tracking error.');
+    }
+  };
 
   return (
     <div className="space-y-8">
@@ -222,6 +271,35 @@ export function UserDashboardWidgets({ userData, quoteGenerator }: UserDashboard
           </div>
         </div>
       </div>
+
+      {/* Sponsored Ads (highest bidders first) */}
+      {topAds.length > 0 && (
+        <div className="bg-white rounded-2xl shadow-lg p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-2xl font-bold text-gray-900">Sponsored for You</h2>
+            <span className="text-xs text-gray-500">Ranked by highest bid</span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {topAds.map((ad, index) => (
+              <button
+                key={ad.id}
+                type="button"
+                onClick={() => handleAdClick(ad)}
+                className="text-left border border-gray-200 rounded-xl p-4 hover:shadow-md hover:border-primary-200 transition-all"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs uppercase tracking-wide text-primary-600 font-semibold">
+                    Sponsored #{index + 1}
+                  </span>
+                  <span className="text-xs text-gray-500">{ad.category}</span>
+                </div>
+                <h3 className="font-semibold text-gray-900">{ad.title}</h3>
+                <p className="text-sm text-gray-600 mt-1">{ad.advertiser}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Quick Actions */}
       <div className="bg-gradient-to-r from-primary-500 to-secondary-500 rounded-2xl p-8 text-white">

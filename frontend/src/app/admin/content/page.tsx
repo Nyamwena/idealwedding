@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 import Link from 'next/link';
+import { AdminPagination } from '@/components/admin/AdminPagination';
 
 interface Content {
   id: string;
@@ -38,6 +39,8 @@ export default function AdminContentPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
 
 
@@ -161,6 +164,20 @@ export default function AdminContentPage() {
       (typeFilter === 'all' || c.type === typeFilter) &&
       (statusFilter === 'all' || c.status === statusFilter)
   );
+
+  const totalPages = Math.max(1, Math.ceil(filteredContent.length / itemsPerPage));
+  const paginatedContent = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredContent.slice(start, start + itemsPerPage);
+  }, [filteredContent, currentPage, itemsPerPage]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, typeFilter, statusFilter, itemsPerPage]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [currentPage, totalPages]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -313,7 +330,7 @@ export default function AdminContentPage() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {filteredContent.map((c) => (
+                {paginatedContent.map((c) => (
                   <tr key={c.id}>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm font-medium text-gray-900">{c.title}</div>
@@ -390,6 +407,20 @@ export default function AdminContentPage() {
               </tbody>
             </table>
           </div>
+          <AdminPagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={filteredContent.length}
+            itemsPerPage={itemsPerPage}
+            onPageChange={(page) => {
+              if (page < 1 || page > totalPages) return;
+              setCurrentPage(page);
+            }}
+            onItemsPerPageChange={(items) => {
+              setItemsPerPage(items);
+              setCurrentPage(1);
+            }}
+          />
         </div>
 
         {/* Content Details Modal */}

@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
+import { AdminPagination } from '@/components/admin/AdminPagination';
 
 interface BannerAd {
   id: string;
@@ -28,6 +29,8 @@ interface BannerAd {
   bidPerClick?: number;
   totalSpent?: number;
   maxDailyBudget?: number;
+  availableCredits?: number;
+  canServePaidClick?: boolean;
 }
 
 interface AdSenseConfig {
@@ -75,6 +78,74 @@ interface FraudAuditData {
   }>;
 }
 
+function normalizeAdSenseConfig(input: unknown): AdSenseConfig {
+  const raw = (input && typeof input === 'object') ? (input as Record<string, unknown>) : {};
+  const slots = (raw.adSlots && typeof raw.adSlots === 'object')
+    ? (raw.adSlots as Record<string, unknown>)
+    : {};
+  const toNumber = (value: unknown) => {
+    const n = Number(value ?? 0);
+    return Number.isFinite(n) ? n : 0;
+  };
+
+  return {
+    enabled: Boolean(raw.enabled),
+    clientId: typeof raw.clientId === 'string' ? raw.clientId : '',
+    publisherId: typeof raw.publisherId === 'string' ? raw.publisherId : '',
+    testMode: raw.testMode === undefined ? true : Boolean(raw.testMode),
+    adsTxtSnippet: typeof raw.adsTxtSnippet === 'string' ? raw.adsTxtSnippet : '',
+    scriptTag: typeof raw.scriptTag === 'string' ? raw.scriptTag : '',
+    adSlots: {
+      header: typeof slots.header === 'string' ? slots.header : '',
+      sidebar: typeof slots.sidebar === 'string' ? slots.sidebar : '',
+      footer: typeof slots.footer === 'string' ? slots.footer : '',
+      content: typeof slots.content === 'string' ? slots.content : '',
+    },
+    revenue: toNumber(raw.revenue),
+    impressions: toNumber(raw.impressions),
+    clicks: toNumber(raw.clicks),
+  };
+}
+
+function normalizeFraudAudit(input: unknown): FraudAuditData {
+  const raw = (input && typeof input === 'object') ? (input as Record<string, unknown>) : {};
+  const totalsRaw = (raw.totals && typeof raw.totals === 'object')
+    ? (raw.totals as Record<string, unknown>)
+    : {};
+  const toNumber = (value: unknown) => {
+    const n = Number(value ?? 0);
+    return Number.isFinite(n) ? n : 0;
+  };
+  const toArray = <T,>(value: unknown): T[] => Array.isArray(value) ? (value as T[]) : [];
+
+  return {
+    totals: {
+      blockedAllTime: toNumber(totalsRaw.blockedAllTime),
+      blockedLast24h: toNumber(totalsRaw.blockedLast24h),
+    },
+    topFingerprints: toArray<{ key: string; count: number }>(raw.topFingerprints),
+    topIps: toArray<{ key: string; count: number }>(raw.topIps),
+    byReason: toArray<{ key: string; count: number }>(raw.byReason),
+    recentBlocked: toArray<{
+      id: string;
+      adId: string;
+      vendorId: string;
+      ip: string;
+      fingerprint: string;
+      reason: string;
+      timestamp: string;
+    }>(raw.recentBlocked),
+    activeBlocks: toArray<{
+      id: string;
+      type: 'ip' | 'fingerprint';
+      value: string;
+      reason: string;
+      createdAt: string;
+      expiresAt: string;
+    }>(raw.activeBlocks),
+  };
+}
+
 export default function AdminAdsPage() {
   const { user, isAdmin, logout } = useAuth();
   const router = useRouter();
@@ -96,14 +167,9 @@ export default function AdminAdsPage() {
     impressions: 0,
     clicks: 0
   });
-  const [fraudAudit, setFraudAudit] = useState<FraudAuditData>({
-    totals: { blockedAllTime: 0, blockedLast24h: 0 },
-    topFingerprints: [],
-    topIps: [],
-    byReason: [],
-    recentBlocked: [],
-    activeBlocks: [],
-  });
+  const [fraudAudit, setFraudAudit] = useState<FraudAuditData>(
+    normalizeFraudAudit(null)
+  );
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [showAdModal, setShowAdModal] = useState(false);
@@ -129,6 +195,8 @@ export default function AdminAdsPage() {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   useEffect(() => {
     if ( !isAdmin) {
@@ -165,50 +233,22 @@ export default function AdminAdsPage() {
         throw new Error(configResult.error || 'Failed to load AdSense config');
       }
       
-      setAdSenseConfig(configResult.data || {
-        enabled: false,
-        clientId: '',
-        adSlots: { header: '', sidebar: '', footer: '', content: '' },
-        revenue: 0,
-        impressions: 0,
-        clicks: 0
-      });
+      setAdSenseConfig(normalizeAdSenseConfig(configResult.data));
 
       const fraudResponse = await fetch('/api/admin/advertisements?type=fraudAudit');
       const fraudResult = await fraudResponse.json();
       if (!fraudResponse.ok) {
         throw new Error(fraudResult.error || 'Failed to load fraud audit');
       }
-      setFraudAudit(fraudResult.data || {
-        totals: { blockedAllTime: 0, blockedLast24h: 0 },
-        topFingerprints: [],
-        topIps: [],
-        byReason: [],
-        recentBlocked: [],
-        activeBlocks: [],
-      });
+      setFraudAudit(normalizeFraudAudit(fraudResult.data));
       
     } catch (error) {
       console.error('Error loading advertisement data:', error);
       setError(error instanceof Error ? error.message : 'Failed to load advertisement data');
       // Set default values to prevent crashes
       setBannerAds([]);
-      setAdSenseConfig({
-        enabled: false,
-        clientId: '',
-        adSlots: { header: '', sidebar: '', footer: '', content: '' },
-        revenue: 0,
-        impressions: 0,
-        clicks: 0
-      });
-      setFraudAudit({
-        totals: { blockedAllTime: 0, blockedLast24h: 0 },
-        topFingerprints: [],
-        topIps: [],
-        byReason: [],
-        recentBlocked: [],
-        activeBlocks: [],
-      });
+      setAdSenseConfig(normalizeAdSenseConfig(null));
+      setFraudAudit(normalizeFraudAudit(null));
     } finally {
       setLoading(false);
     }
@@ -226,6 +266,20 @@ export default function AdminAdsPage() {
     const matchesStatus = statusFilter === 'all' || ad.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
+
+  const totalPages = Math.max(1, Math.ceil(filteredAds.length / itemsPerPage));
+  const paginatedAds = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredAds.slice(start, start + itemsPerPage);
+  }, [filteredAds, currentPage, itemsPerPage]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, statusFilter, itemsPerPage]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [currentPage, totalPages]);
 
   const getStatusBadge = (status: string) => {
     const styles = {
@@ -417,7 +471,7 @@ export default function AdminAdsPage() {
       if (!response.ok) {
         throw new Error(result.error || 'Failed to save AdSense config');
       }
-      setAdSenseConfig(result.data);
+      setAdSenseConfig(normalizeAdSenseConfig(result.data));
       setSuccessMessage('AdSense configuration saved successfully.');
       setTimeout(() => setSuccessMessage(null), 4000);
       setShowAdSenseModal(false);
@@ -561,7 +615,7 @@ export default function AdminAdsPage() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <div className="bg-white rounded-2xl p-6 shadow-lg text-center">
             <div className="text-2xl font-bold text-green-600 mb-2">
-              ${adSenseConfig.revenue.toLocaleString()}
+              ${(Number(adSenseConfig.revenue) || 0).toLocaleString()}
             </div>
             <div className="text-gray-600">AdSense Revenue</div>
           </div>
@@ -573,13 +627,13 @@ export default function AdminAdsPage() {
           </div>
           <div className="bg-white rounded-2xl p-6 shadow-lg text-center">
             <div className="text-2xl font-bold text-purple-600 mb-2">
-              {adSenseConfig.impressions.toLocaleString()}
+              {(Number(adSenseConfig.impressions) || 0).toLocaleString()}
             </div>
             <div className="text-gray-600">Total Impressions</div>
           </div>
           <div className="bg-white rounded-2xl p-6 shadow-lg text-center">
             <div className="text-2xl font-bold text-orange-600 mb-2">
-              {adSenseConfig.clicks.toLocaleString()}
+              {(Number(adSenseConfig.clicks) || 0).toLocaleString()}
             </div>
             <div className="text-gray-600">Total Clicks</div>
           </div>
@@ -764,6 +818,9 @@ export default function AdminAdsPage() {
                     Bid / Cost
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Funding
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Advertiser
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -772,7 +829,7 @@ export default function AdminAdsPage() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {filteredAds.map((ad) => (
+                {paginatedAds.map((ad) => (
                   <tr key={ad.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
@@ -809,6 +866,18 @@ export default function AdminAdsPage() {
                       ${Number(ad.bidPerClick || ad.cost || 0).toFixed(2)}/click
                       <div className="text-xs text-gray-500">
                         Spent: ${Number(ad.totalSpent || 0).toFixed(2)}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <span
+                        className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                          ad.canServePaidClick ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                        }`}
+                      >
+                        {ad.canServePaidClick ? 'Funded' : 'Depleted'}
+                      </span>
+                      <div className="text-xs text-gray-500 mt-1">
+                        Balance: ${Number(ad.availableCredits || 0).toFixed(2)}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -853,6 +922,20 @@ export default function AdminAdsPage() {
               </tbody>
             </table>
           </div>
+          <AdminPagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={filteredAds.length}
+            itemsPerPage={itemsPerPage}
+            onPageChange={(page) => {
+              if (page < 1 || page > totalPages) return;
+              setCurrentPage(page);
+            }}
+            onItemsPerPageChange={(items) => {
+              setItemsPerPage(items);
+              setCurrentPage(1);
+            }}
+          />
         </div>
 
         {/* Google AdSense Configuration */}
@@ -916,20 +999,28 @@ export default function AdminAdsPage() {
               <div className="space-y-3">
                 <div className="flex justify-between">
                   <span className="text-sm text-gray-600">Total Revenue:</span>
-                  <span className="text-sm font-medium text-gray-900">${adSenseConfig.revenue.toLocaleString()}</span>
+                  <span className="text-sm font-medium text-gray-900">
+                    ${(Number(adSenseConfig.revenue) || 0).toLocaleString()}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-sm text-gray-600">Total Impressions:</span>
-                  <span className="text-sm font-medium text-gray-900">{adSenseConfig.impressions.toLocaleString()}</span>
+                  <span className="text-sm font-medium text-gray-900">
+                    {(Number(adSenseConfig.impressions) || 0).toLocaleString()}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-sm text-gray-600">Total Clicks:</span>
-                  <span className="text-sm font-medium text-gray-900">{adSenseConfig.clicks.toLocaleString()}</span>
+                  <span className="text-sm font-medium text-gray-900">
+                    {(Number(adSenseConfig.clicks) || 0).toLocaleString()}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-sm text-gray-600">Click-through Rate:</span>
                   <span className="text-sm font-medium text-gray-900">
-                    {adSenseConfig.impressions > 0 ? ((adSenseConfig.clicks / adSenseConfig.impressions) * 100).toFixed(2) : '0.00'}%
+                    {(Number(adSenseConfig.impressions) || 0) > 0
+                      ? (((Number(adSenseConfig.clicks) || 0) / (Number(adSenseConfig.impressions) || 1)) * 100).toFixed(2)
+                      : '0.00'}%
                   </span>
                 </div>
               </div>
@@ -1365,6 +1456,14 @@ export default function AdminAdsPage() {
                             <p><span className="font-medium">Impressions:</span> {selectedAd.impressions}</p>
                             <p><span className="font-medium">CTR:</span> {selectedAd.ctr}%</p>
                             <p><span className="font-medium">Cost:</span> ${selectedAd.cost}</p>
+                            <p>
+                              <span className="font-medium">Ad Balance:</span>{' '}
+                              ${Number(selectedAd.availableCredits || 0).toFixed(2)}
+                            </p>
+                            <p>
+                              <span className="font-medium">Funding Status:</span>{' '}
+                              {selectedAd.canServePaidClick ? 'Funded' : 'Depleted'}
+                            </p>
                             <p><span className="font-medium">Start Date:</span> {selectedAd.startDate}</p>
                             <p><span className="font-medium">End Date:</span> {selectedAd.endDate}</p>
                           </div>

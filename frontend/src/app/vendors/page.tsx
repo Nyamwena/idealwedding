@@ -145,13 +145,11 @@ export default function VendorsPage() {
       const result = await response.json();
       if (response.ok && result.data?.targetUrl) {
         window.open(result.data.targetUrl, '_blank', 'noopener,noreferrer');
-      } else if (ad.targetUrl) {
-        window.open(ad.targetUrl, '_blank', 'noopener,noreferrer');
+      } else {
+        console.warn('Ad click not opened because billing was not successful.');
       }
     } catch {
-      if (ad.targetUrl) {
-        window.open(ad.targetUrl, '_blank', 'noopener,noreferrer');
-      }
+      console.warn('Ad click not opened due to click tracking error.');
     }
   };
 

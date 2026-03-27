@@ -42,30 +42,44 @@ export async function GET(request: NextRequest) {
       if (position && ad.position !== position) return false;
       if (ad.startDate && new Date(ad.startDate) > now) return false;
       if (ad.endDate && new Date(ad.endDate) < now) return false;
-
-      const wallet = wallets.find(
-        (w) =>
-          String(w.vendorUserId || '') === String(ad.vendorUserId || '') ||
-          String(w.vendorId || '') === String(ad.vendorId || '') ||
-          String(w.email || '').toLowerCase() === String(ad.advertiserEmail || '').toLowerCase(),
-      );
-      const credits = Number(wallet?.currentCredits || 0);
-      const bid = Number(ad.bidPerClick || ad.cost || 0);
-      if (credits < bid) return false;
-
-      const maxDailyBudget = Number(ad.maxDailyBudget || 0);
-      if (maxDailyBudget > 0) {
-        const dailySpent = clickEvents
-          .filter((ev: any) => ev.adId === ad.id && dayKey(ev.timestamp) === today)
-          .reduce((sum: number, ev: any) => sum + Number(ev.charge || 0), 0);
-        if (dailySpent + bid > maxDailyBudget) return false;
-      }
       return true;
     });
 
     const ranked = eligible
-      .slice()
+      .map((ad: any) => {
+        const wallet = wallets.find(
+          (w) =>
+            String(w.vendorUserId || '') === String(ad.vendorUserId || '') ||
+            String(w.vendorId || '') === String(ad.vendorId || '') ||
+            String(w.email || '').toLowerCase() === String(ad.advertiserEmail || '').toLowerCase(),
+        );
+        const credits = Number(wallet?.currentCredits || 0);
+        const bid = Number(ad.bidPerClick || ad.cost || 0);
+        const hasBidCoverage = bid > 0 && credits >= bid;
+
+        const maxDailyBudget = Number(ad.maxDailyBudget || 0);
+        let budgetAvailable = true;
+        if (maxDailyBudget > 0) {
+          const dailySpent = clickEvents
+            .filter((ev: any) => ev.adId === ad.id && dayKey(ev.timestamp) === today)
+            .reduce((sum: number, ev: any) => sum + Number(ev.charge || 0), 0);
+          budgetAvailable = dailySpent + bid <= maxDailyBudget;
+        }
+
+        return {
+          ...ad,
+          availableCredits: credits,
+          canServePaidClick: hasBidCoverage && budgetAvailable,
+        };
+      })
       .sort((a: any, b: any) => {
+        // Funded ads rank first; depleted/budget-capped ads fall below.
+        const fundedDelta = Number(b.canServePaidClick) - Number(a.canServePaidClick);
+        if (fundedDelta !== 0) return fundedDelta;
+        // Within each group, higher ad-account balance gets higher rank.
+        const balanceDelta = Number(b.availableCredits || 0) - Number(a.availableCredits || 0);
+        if (balanceDelta !== 0) return balanceDelta;
+        // Tie-breaker: higher bid then CTR.
         const bidDelta = Number(b.bidPerClick || b.cost || 0) - Number(a.bidPerClick || a.cost || 0);
         if (bidDelta !== 0) return bidDelta;
         return Number(b.ctr || 0) - Number(a.ctr || 0);

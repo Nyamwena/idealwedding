@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 import Link from 'next/link';
+import { AdminPagination } from '@/components/admin/AdminPagination';
 
 interface Notification {
   id: string;
@@ -40,6 +41,8 @@ export default function AdminNotificationsPage() {
   const [typeFilter, setTypeFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [targetFilter, setTargetFilter] = useState('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
 
 
@@ -163,6 +166,20 @@ export default function AdminNotificationsPage() {
       (statusFilter === 'all' || n.status === statusFilter) &&
       (targetFilter === 'all' || n.target === targetFilter)
   );
+
+  const totalPages = Math.max(1, Math.ceil(filteredNotifications.length / itemsPerPage));
+  const paginatedNotifications = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredNotifications.slice(start, start + itemsPerPage);
+  }, [filteredNotifications, currentPage, itemsPerPage]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, typeFilter, statusFilter, targetFilter, itemsPerPage]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [currentPage, totalPages]);
 
   const getTypeColor = (type: string) => {
     switch (type) {
@@ -330,7 +347,7 @@ export default function AdminNotificationsPage() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {filteredNotifications.map((n) => (
+                {paginatedNotifications.map((n) => (
                   <tr key={n.id}>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div>
@@ -414,6 +431,20 @@ export default function AdminNotificationsPage() {
               </tbody>
             </table>
           </div>
+          <AdminPagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={filteredNotifications.length}
+            itemsPerPage={itemsPerPage}
+            onPageChange={(page) => {
+              if (page < 1 || page > totalPages) return;
+              setCurrentPage(page);
+            }}
+            onItemsPerPageChange={(items) => {
+              setItemsPerPage(items);
+              setCurrentPage(1);
+            }}
+          />
         </div>
 
         {/* Notification Details Modal */}

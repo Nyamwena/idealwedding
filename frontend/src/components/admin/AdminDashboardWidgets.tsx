@@ -5,13 +5,19 @@ import React from 'react';
 interface StatCardProps {
   title: string;
   value: string | number;
-  change: string;
-  changeType: 'increase' | 'decrease' | 'neutral';
   icon: string;
   color: 'blue' | 'green' | 'yellow' | 'red' | 'purple';
+  /** When omitted, the “vs last month” row is hidden (use for live totals). */
+  trend?: {
+    change: string;
+    changeType: 'increase' | 'decrease' | 'neutral';
+    label?: string;
+  };
+  /** Shown under the value when `trend` is omitted (e.g. data source hint). */
+  sublabel?: string;
 }
 
-export function StatCard({ title, value, change, changeType, icon, color }: StatCardProps) {
+export function StatCard({ title, value, icon, color, trend, sublabel }: StatCardProps) {
   const getColorClasses = () => {
     switch (color) {
       case 'blue':
@@ -53,7 +59,7 @@ export function StatCard({ title, value, change, changeType, icon, color }: Stat
     }
   };
 
-  const getChangeIcon = () => {
+  const getChangeIcon = (changeType: 'increase' | 'decrease' | 'neutral') => {
     switch (changeType) {
       case 'increase':
         return '↗️';
@@ -64,7 +70,7 @@ export function StatCard({ title, value, change, changeType, icon, color }: Stat
     }
   };
 
-  const getChangeColor = () => {
+  const getChangeColor = (changeType: 'increase' | 'decrease' | 'neutral') => {
     switch (changeType) {
       case 'increase':
         return 'text-green-600';
@@ -83,10 +89,16 @@ export function StatCard({ title, value, change, changeType, icon, color }: Stat
         <div>
           <p className="text-sm font-medium text-gray-600">{title}</p>
           <p className="text-3xl font-bold text-gray-900 mt-2">{value}</p>
-          <div className={`flex items-center mt-2 ${getChangeColor()}`}>
-            <span className="text-sm font-medium">{getChangeIcon()} {change}</span>
-            <span className="text-sm ml-1">vs last month</span>
-          </div>
+          {trend ? (
+            <div className={`flex items-center mt-2 ${getChangeColor(trend.changeType)}`}>
+              <span className="text-sm font-medium">
+                {getChangeIcon(trend.changeType)} {trend.change}
+              </span>
+              <span className="text-sm ml-1">{trend.label ?? 'vs last month'}</span>
+            </div>
+          ) : sublabel ? (
+            <p className="text-xs text-gray-500 mt-2">{sublabel}</p>
+          ) : null}
         </div>
         <div className={`p-3 rounded-full ${colors.bgLight}`}>
           <span className="text-2xl">{icon}</span>
@@ -96,62 +108,190 @@ export function StatCard({ title, value, change, changeType, icon, color }: Stat
   );
 }
 
-interface ChartWidgetProps {
-  title: string;
-  data: any[];
-  type: 'line' | 'bar' | 'pie';
+export interface ChartSeriesPoint {
+  label: string;
+  value: number;
 }
 
-export function ChartWidget({ title, data, type }: ChartWidgetProps) {
+interface ChartWidgetProps {
+  title: string;
+  /** Monthly or categorical points; values are summed revenue (or similar). */
+  series: ChartSeriesPoint[];
+  loading?: boolean;
+  valuePrefix?: string;
+}
+
+export function ChartWidget({
+  title,
+  series,
+  loading,
+  valuePrefix = '$',
+}: ChartWidgetProps) {
+  const formatVal = (n: number) =>
+    n.toLocaleString(undefined, {
+      maximumFractionDigits: n >= 1000 ? 0 : 2,
+    });
+
+  if (loading) {
+    return (
+      <div className="bg-white rounded-2xl p-6 shadow-lg">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">{title}</h3>
+        <div className="h-64 flex items-center justify-center bg-gray-50 rounded-lg text-gray-500 text-sm">
+          Loading chart…
+        </div>
+      </div>
+    );
+  }
+
+  const values = series.map((s) => s.value);
+  const max = Math.max(1, ...values);
+  const n = Math.max(1, series.length);
+  const w = 560;
+  const h = 220;
+  const padL = 44;
+  const padR = 12;
+  const padT = 8;
+  const padB = 36;
+  const innerW = w - padL - padR;
+  const innerH = h - padT - padB;
+
+  const coords = series.map((s, i) => {
+    const x = padL + (n <= 1 ? innerW / 2 : (i / (n - 1)) * innerW);
+    const y = padT + innerH - (s.value / max) * innerH;
+    return { x, y, ...s };
+  });
+
+  const lineD = coords.length
+    ? coords.map((c, i) => `${i === 0 ? 'M' : 'L'} ${c.x.toFixed(1)} ${c.y.toFixed(1)}`).join(' ')
+    : '';
+  const areaD =
+    coords.length >= 2
+      ? `${lineD} L ${coords[coords.length - 1]!.x.toFixed(1)} ${(padT + innerH).toFixed(1)} L ${coords[0]!.x.toFixed(1)} ${(padT + innerH).toFixed(1)} Z`
+      : '';
+
   return (
     <div className="bg-white rounded-2xl p-6 shadow-lg">
       <h3 className="text-lg font-semibold text-gray-900 mb-4">{title}</h3>
-      <div className="h-64 flex items-center justify-center bg-gray-50 rounded-lg">
-        <div className="text-center">
-          <div className="text-4xl mb-2">📊</div>
-          <p className="text-gray-500">Chart placeholder</p>
-          <p className="text-sm text-gray-400">Integration with Chart.js or similar</p>
+      <p className="text-xs text-gray-500 mb-2">
+        Completed payment totals by month (last {series.length || 12} months)
+      </p>
+      {series.length === 0 ? (
+        <div className="h-64 flex items-center justify-center bg-gray-50 rounded-lg text-center text-gray-500 text-sm px-4">
+          No months to display yet.
         </div>
-      </div>
+      ) : (
+        <div className="bg-gray-50 rounded-lg overflow-x-auto">
+          <svg
+            viewBox={`0 0 ${w} ${h}`}
+            className="w-full h-64 min-w-[280px]"
+            preserveAspectRatio="xMidYMid meet"
+          >
+            <defs>
+              <linearGradient id="revenueFill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="rgb(147 51 234)" stopOpacity="0.25" />
+                <stop offset="100%" stopColor="rgb(147 51 234)" stopOpacity="0.02" />
+              </linearGradient>
+            </defs>
+            {[0, 0.25, 0.5, 0.75, 1].map((t) => {
+              const y = padT + innerH * (1 - t);
+              return (
+                <line
+                  key={t}
+                  x1={padL}
+                  y1={y}
+                  x2={padL + innerW}
+                  y2={y}
+                  stroke="rgb(229 231 235)"
+                  strokeWidth="1"
+                />
+              );
+            })}
+            {areaD ? (
+              <path d={areaD} fill="url(#revenueFill)" stroke="none" />
+            ) : null}
+            {lineD ? (
+              <path
+                d={lineD}
+                fill="none"
+                stroke="rgb(126 34 206)"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            ) : null}
+            {coords.map((c) => (
+              <g key={c.label}>
+                <circle cx={c.x} cy={c.y} r="4" fill="white" stroke="rgb(126 34 206)" strokeWidth="2" />
+                <title>{`${c.label}: ${valuePrefix}${formatVal(c.value)}`}</title>
+              </g>
+            ))}
+            {coords.map((c, i) => (
+              <text
+                key={`${c.label}-${i}-x`}
+                x={c.x}
+                y={h - 8}
+                textAnchor="middle"
+                fill="rgb(107 114 128)"
+                style={{ fontSize: '10px' }}
+              >
+                {c.label}
+              </text>
+            ))}
+          </svg>
+        </div>
+      )}
     </div>
   );
 }
 
-interface RecentActivityProps {
-  activities: Array<{
-    id: string;
-    user: string;
-    action: string;
-    resource: string;
-    timestamp: string;
-    avatar?: string;
-  }>;
+export interface RecentActivityItem {
+  id: string;
+  message: string;
+  timestamp: string;
+  avatarLetter: string;
 }
 
-export function RecentActivity({ activities }: RecentActivityProps) {
+interface RecentActivityProps {
+  activities: RecentActivityItem[];
+  loading?: boolean;
+}
+
+export function RecentActivity({ activities, loading }: RecentActivityProps) {
   return (
     <div className="bg-white rounded-2xl p-6 shadow-lg">
       <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Activity</h3>
-      <div className="space-y-4">
-        {activities.map((activity) => (
-          <div key={activity.id} className="flex items-center space-x-3">
-            <div className="flex-shrink-0">
-              <div className="h-8 w-8 rounded-full bg-primary-100 flex items-center justify-center">
-                <span className="text-sm font-medium text-primary-600">
-                  {activity.user[0]}
-                </span>
+      <p className="text-xs text-gray-500 mb-3">
+        Latest from audit logs, payments, bookings, and quotes
+      </p>
+      {loading ? (
+        <p className="text-sm text-gray-500">Loading…</p>
+      ) : activities.length === 0 ? (
+        <p className="text-sm text-gray-500">
+          No recent events in the last dataset. Create bookings, quotes, or payments—or check{' '}
+          <a href="/admin/audit-logs" className="text-primary-600 hover:underline">
+            audit logs
+          </a>
+          .
+        </p>
+      ) : (
+        <div className="space-y-4">
+          {activities.map((activity) => (
+            <div key={activity.id} className="flex items-start space-x-3">
+              <div className="flex-shrink-0">
+                <div className="h-8 w-8 rounded-full bg-primary-100 flex items-center justify-center">
+                  <span className="text-sm font-medium text-primary-600">
+                    {activity.avatarLetter}
+                  </span>
+                </div>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-gray-900">{activity.message}</p>
+                <p className="text-xs text-gray-500 mt-1">{activity.timestamp}</p>
               </div>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm text-gray-900">
-                <span className="font-medium">{activity.user}</span> {activity.action.toLowerCase()}{' '}
-                <span className="font-medium">{activity.resource}</span>
-              </p>
-              <p className="text-xs text-gray-500">{activity.timestamp}</p>
-            </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -4,7 +4,8 @@ import React, { useState } from 'react';
 import { useAdminNotifications } from '@/hooks/useAdminNotifications';
 
 export function AdminNotificationBell() {
-  const { notifications, unreadCount, markAsRead, markAllAsRead } = useAdminNotifications();
+  const { notifications, unreadCount, loading, error, markAsRead, markAllAsRead } =
+    useAdminNotifications();
   const [isOpen, setIsOpen] = useState(false);
 
   const getNotificationIcon = (type: string) => {
@@ -73,7 +74,8 @@ export function AdminNotificationBell() {
                 <h3 className="text-lg font-semibold text-gray-900">Notifications</h3>
                 {unreadCount > 0 && (
                   <button
-                    onClick={markAllAsRead}
+                    type="button"
+                    onClick={() => void markAllAsRead()}
                     className="text-sm text-primary-600 hover:text-primary-700"
                   >
                     Mark all as read
@@ -83,10 +85,20 @@ export function AdminNotificationBell() {
             </div>
             
             <div className="max-h-96 overflow-y-auto">
-              {notifications.length === 0 ? (
+              {error && (
+                <div className="p-3 text-xs text-amber-800 bg-amber-50 border-b border-amber-100">
+                  {error}
+                </div>
+              )}
+              {loading ? (
+                <div className="p-6 text-center text-gray-500 text-sm">Loading…</div>
+              ) : notifications.length === 0 ? (
                 <div className="p-4 text-center text-gray-500">
                   <div className="text-4xl mb-2">🔔</div>
                   <p>No notifications</p>
+                  <p className="text-xs mt-2 text-gray-400">
+                    Alerts appear for pending vendors, quotes, and failed payments.
+                  </p>
                 </div>
               ) : (
                 <div className="divide-y divide-gray-200">
@@ -98,7 +110,7 @@ export function AdminNotificationBell() {
                       }`}
                       onClick={() => {
                         if (!notification.read) {
-                          markAsRead(notification.id);
+                          void markAsRead(notification.id);
                         }
                         if (notification.action) {
                           window.location.href = notification.action.href;

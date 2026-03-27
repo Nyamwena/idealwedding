@@ -7,6 +7,8 @@ import { verifyToken } from '@/lib/auth';
 const getVendors = () => readDataFile<any[]>('vendors.json', []);
 const getCreditWallets = () => readDataFile<any[]>('vendor-credit-wallets.json', []);
 const saveVendors = (vendors: any[]) => writeDataFile('vendors.json', vendors);
+const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'https://api-auth.idealweddings.space';
+const DEFAULT_VENDOR_PASSWORD = 'vendorpassword';
 
 function getAuthToken(request: NextRequest): string | null {
     const header = request.headers.get('authorization');
@@ -30,6 +32,40 @@ async function requireAdmin(request: NextRequest): Promise<NextResponse | null> 
     }
 
     return null;
+}
+
+function splitName(fullName: string): { firstName: string; lastName: string } {
+    const clean = fullName.trim();
+    if (!clean) return { firstName: 'Vendor', lastName: 'User' };
+    const parts = clean.split(/\s+/).filter(Boolean);
+    if (parts.length === 1) return { firstName: parts[0], lastName: 'Vendor' };
+    return {
+        firstName: parts[0],
+        lastName: parts.slice(1).join(' '),
+    };
+}
+
+async function ensureVendorAuthAccount(name: string, email: string): Promise<void> {
+    const { firstName, lastName } = splitName(name);
+    const response = await fetch(`${AUTH_SERVICE_URL}/api/v1/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            email,
+            password: DEFAULT_VENDOR_PASSWORD,
+            firstName,
+            lastName,
+            role: 'vendor',
+        }),
+    });
+
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok || !json.success) {
+        const msg = String(json?.message || '').toLowerCase();
+        // If auth user already exists, we treat that as non-fatal so vendor profiles can be linked.
+        if (response.status === 409 || msg.includes('exist')) return;
+        throw new Error(json?.message || 'Failed to create vendor auth account');
+    }
 }
 
 // GET /api/admin/vendors
@@ -86,6 +122,9 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        // Create (or confirm existing) auth account for this vendor first.
+        await ensureVendorAuthAccount(name, email);
+
         const newVendor = {
             id: (vendors.length + 1).toString(),
             name, email, category,
@@ -112,7 +151,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({
             success: true,
             data: newVendor,
-            message: 'Vendor created successfully',
+            message: `Vendor created successfully. Default password: ${DEFAULT_VENDOR_PASSWORD}`,
         });
     } catch (error) {
         console.error('Error in POST /api/admin/vendors:', error);

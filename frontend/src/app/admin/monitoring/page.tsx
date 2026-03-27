@@ -43,6 +43,20 @@ interface LeadGeneration {
   period: string;
 }
 
+interface HealthService {
+  status: 'healthy' | 'warning' | 'critical';
+  uptime?: number;
+  responseTime?: number;
+}
+
+interface SystemHealth {
+  apiGateway: HealthService;
+  database: HealthService;
+  paymentService: HealthService;
+  emailService: HealthService;
+  response: HealthService;
+}
+
 export default function AdminMonitoringPage() {
   const { user,  isAdmin, logout } = useAuth();
   const router = useRouter();
@@ -50,8 +64,8 @@ export default function AdminMonitoringPage() {
   const [vendorActivities, setVendorActivities] = useState<VendorActivity[]>([]);
   const [creditUsage, setCreditUsage] = useState<CreditUsage[]>([]);
   const [leadGeneration, setLeadGeneration] = useState<LeadGeneration[]>([]);
+  const [systemHealth, setSystemHealth] = useState<SystemHealth | null>(null);
   const [selectedTimeRange, setSelectedTimeRange] = useState('7d');
-  const [refreshInterval, setRefreshInterval] = useState(30);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
@@ -69,7 +83,7 @@ export default function AdminMonitoringPage() {
       setLoading(true);
       setError(null);
       
-      const response = await fetch('/api/admin/monitoring');
+      const response = await fetch(`/api/admin/monitoring?range=${selectedTimeRange}`);
       const result = await response.json();
       
       if (!response.ok) {
@@ -84,48 +98,48 @@ export default function AdminMonitoringPage() {
           name: 'Active Vendors',
           value: data.metrics.activeVendors,
           unit: 'vendors',
-          change: 8.2,
-          changeType: 'increase',
-          status: 'healthy'
+          change: 0,
+          changeType: 'neutral',
+          status: data.metrics.activeVendors > 0 ? 'healthy' : 'warning'
         },
         {
           name: 'Active Users',
           value: data.metrics.activeUsers,
           unit: 'users',
-          change: 15.3,
-          changeType: 'increase',
-          status: 'healthy'
+          change: 0,
+          changeType: 'neutral',
+          status: data.metrics.activeUsers > 0 ? 'healthy' : 'warning'
         },
         {
           name: 'Credits Used Today',
           value: data.metrics.creditsUsedToday,
           unit: 'credits',
-          change: -2.1,
-          changeType: 'decrease',
+          change: 0,
+          changeType: 'neutral',
           status: data.metrics.creditsUsedToday > 200 ? 'warning' : 'healthy'
         },
         {
           name: 'Leads Generated',
           value: data.metrics.leadsGenerated,
           unit: 'leads',
-          change: 12.5,
-          changeType: 'increase',
-          status: 'healthy'
+          change: 0,
+          changeType: 'neutral',
+          status: data.metrics.leadsGenerated > 0 ? 'healthy' : 'warning'
         },
         {
           name: 'System Uptime',
           value: data.metrics.systemUptime,
           unit: '%',
-          change: 0.1,
-          changeType: 'increase',
+          change: 0,
+          changeType: 'neutral',
           status: data.metrics.systemUptime > 99 ? 'healthy' : 'warning'
         },
         {
           name: 'Response Time',
           value: data.metrics.responseTime,
           unit: 'ms',
-          change: -15.2,
-          changeType: 'decrease',
+          change: 0,
+          changeType: 'neutral',
           status: data.metrics.responseTime < 300 ? 'healthy' : 'warning'
         }
       ];
@@ -134,6 +148,7 @@ export default function AdminMonitoringPage() {
       setVendorActivities(data.vendorActivities || []);
       setCreditUsage(data.creditUsage || []);
       setLeadGeneration(data.leadGeneration || []);
+      setSystemHealth(data.systemHealth || null);
       setLastUpdated(data.lastUpdated);
       
     } catch (error) {
@@ -144,6 +159,7 @@ export default function AdminMonitoringPage() {
       setVendorActivities([]);
       setCreditUsage([]);
       setLeadGeneration([]);
+      setSystemHealth(null);
     } finally {
       setLoading(false);
     }
@@ -159,7 +175,7 @@ export default function AdminMonitoringPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ action: 'refresh' }),
+        body: JSON.stringify({ action: 'refresh', range: selectedTimeRange }),
       });
       
       const result = await response.json();
@@ -452,32 +468,88 @@ export default function AdminMonitoringPage() {
           <h2 className="text-lg font-semibold text-gray-900 mb-6">System Health Status</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <div className="text-center">
-              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                <span className="text-green-600 text-2xl">✅</span>
+              <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3 ${
+                systemHealth?.apiGateway?.status === 'critical'
+                  ? 'bg-red-100'
+                  : systemHealth?.apiGateway?.status === 'warning'
+                  ? 'bg-yellow-100'
+                  : 'bg-green-100'
+              }`}>
+                <span className={`text-2xl ${
+                  systemHealth?.apiGateway?.status === 'critical'
+                    ? 'text-red-600'
+                    : systemHealth?.apiGateway?.status === 'warning'
+                    ? 'text-yellow-600'
+                    : 'text-green-600'
+                }`}>
+                  {systemHealth?.apiGateway?.status === 'critical' ? '❌' : systemHealth?.apiGateway?.status === 'warning' ? '⚠️' : '✅'}
+                </span>
               </div>
               <h3 className="text-sm font-medium text-gray-900">API Gateway</h3>
-              <p className="text-xs text-gray-500">99.9% uptime</p>
+              <p className="text-xs text-gray-500">{(Number(systemHealth?.apiGateway?.uptime || 0) || 0).toFixed(2)}% uptime</p>
             </div>
             <div className="text-center">
-              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                <span className="text-green-600 text-2xl">✅</span>
+              <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3 ${
+                systemHealth?.database?.status === 'critical'
+                  ? 'bg-red-100'
+                  : systemHealth?.database?.status === 'warning'
+                  ? 'bg-yellow-100'
+                  : 'bg-green-100'
+              }`}>
+                <span className={`text-2xl ${
+                  systemHealth?.database?.status === 'critical'
+                    ? 'text-red-600'
+                    : systemHealth?.database?.status === 'warning'
+                    ? 'text-yellow-600'
+                    : 'text-green-600'
+                }`}>
+                  {systemHealth?.database?.status === 'critical' ? '❌' : systemHealth?.database?.status === 'warning' ? '⚠️' : '✅'}
+                </span>
               </div>
               <h3 className="text-sm font-medium text-gray-900">Database</h3>
-              <p className="text-xs text-gray-500">99.8% uptime</p>
+              <p className="text-xs text-gray-500">{(Number(systemHealth?.database?.uptime || 0) || 0).toFixed(2)}% uptime</p>
             </div>
             <div className="text-center">
-              <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                <span className="text-yellow-600 text-2xl">⚠️</span>
+              <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3 ${
+                systemHealth?.paymentService?.status === 'critical'
+                  ? 'bg-red-100'
+                  : systemHealth?.paymentService?.status === 'warning'
+                  ? 'bg-yellow-100'
+                  : 'bg-green-100'
+              }`}>
+                <span className={`text-2xl ${
+                  systemHealth?.paymentService?.status === 'critical'
+                    ? 'text-red-600'
+                    : systemHealth?.paymentService?.status === 'warning'
+                    ? 'text-yellow-600'
+                    : 'text-green-600'
+                }`}>
+                  {systemHealth?.paymentService?.status === 'critical' ? '❌' : systemHealth?.paymentService?.status === 'warning' ? '⚠️' : '✅'}
+                </span>
               </div>
               <h3 className="text-sm font-medium text-gray-900">Payment Service</h3>
-              <p className="text-xs text-gray-500">98.5% uptime</p>
+              <p className="text-xs text-gray-500">{(Number(systemHealth?.paymentService?.uptime || 0) || 0).toFixed(2)}% uptime</p>
             </div>
             <div className="text-center">
-              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                <span className="text-green-600 text-2xl">✅</span>
+              <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3 ${
+                systemHealth?.emailService?.status === 'critical'
+                  ? 'bg-red-100'
+                  : systemHealth?.emailService?.status === 'warning'
+                  ? 'bg-yellow-100'
+                  : 'bg-green-100'
+              }`}>
+                <span className={`text-2xl ${
+                  systemHealth?.emailService?.status === 'critical'
+                    ? 'text-red-600'
+                    : systemHealth?.emailService?.status === 'warning'
+                    ? 'text-yellow-600'
+                    : 'text-green-600'
+                }`}>
+                  {systemHealth?.emailService?.status === 'critical' ? '❌' : systemHealth?.emailService?.status === 'warning' ? '⚠️' : '✅'}
+                </span>
               </div>
               <h3 className="text-sm font-medium text-gray-900">Email Service</h3>
-              <p className="text-xs text-gray-500">99.7% uptime</p>
+              <p className="text-xs text-gray-500">{(Number(systemHealth?.emailService?.uptime || 0) || 0).toFixed(2)}% uptime</p>
             </div>
           </div>
         </div>

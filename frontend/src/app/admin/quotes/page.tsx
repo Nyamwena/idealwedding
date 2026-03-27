@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
+import { AdminPagination } from '@/components/admin/AdminPagination';
 
 interface MockQuote {
   id: string;
@@ -30,6 +31,8 @@ export default function AdminQuotesPage() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [selectedQuote, setSelectedQuote] = useState<MockQuote | null>(null);
   const [showQuoteModal, setShowQuoteModal] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
 
 
@@ -173,6 +176,20 @@ export default function AdminQuotesPage() {
     return matchesSearch && matchesStatus;
   });
 
+  const totalPages = Math.max(1, Math.ceil(filteredQuotes.length / itemsPerPage));
+  const paginatedQuotes = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredQuotes.slice(start, start + itemsPerPage);
+  }, [filteredQuotes, currentPage, itemsPerPage]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, statusFilter, itemsPerPage]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [currentPage, totalPages]);
+
   const getStatusBadge = (status: string) => {
     const styles = {
       pending: 'bg-yellow-100 text-yellow-800',
@@ -286,7 +303,7 @@ export default function AdminQuotesPage() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {filteredQuotes.map((quote) => (
+                {paginatedQuotes.map((quote) => (
                   <tr key={quote.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
@@ -385,6 +402,20 @@ export default function AdminQuotesPage() {
             </table>
           </div>
         </div>
+        <AdminPagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalItems={filteredQuotes.length}
+          itemsPerPage={itemsPerPage}
+          onPageChange={(page) => {
+            if (page < 1 || page > totalPages) return;
+            setCurrentPage(page);
+          }}
+          onItemsPerPageChange={(items) => {
+            setItemsPerPage(items);
+            setCurrentPage(1);
+          }}
+        />
 
         {/* Summary */}
         <div className="mt-8 grid grid-cols-1 md:grid-cols-4 gap-6">

@@ -29,3 +29,6 @@ coverage/
 
 # Local databases
 *.db
+
+# Large local archives (exceed GitHub limits if committed)
+frontend/next.zip

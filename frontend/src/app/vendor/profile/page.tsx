@@ -12,7 +12,7 @@ import { AdminErrorState } from '@/components/admin/AdminErrorState';
 import { VendorTopMenu } from '@/components/vendor/VendorTopMenu';
 
 export default function VendorProfilePage() {
-  const { user,  isVendor, logout } = useAuth();
+  const { logout } = useAuth();
   const { 
     profile, 
     loading, 
@@ -172,10 +172,6 @@ export default function VendorProfilePage() {
   };
 
 
-
-  if (!isVendor) {
-    return null;
-  }
 
   if (error) {
     return (

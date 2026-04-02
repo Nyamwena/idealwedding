@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import jwt from 'jsonwebtoken';
 import { readDataFile, writeDataFile } from '@/lib/dataFileStore';
+import { getVendorSession } from '@/lib/vendorSession';
+import { newVendorWalletBalanceFields } from '@/lib/vendorWalletStarter';
 
 type CreditWallet = {
   key: string;
@@ -27,35 +28,6 @@ type CreditTransaction = {
   referenceId?: string;
   source?: string;
 };
-
-function getToken(request: NextRequest): string | null {
-  const header = request.headers.get('authorization');
-  if (header?.startsWith('Bearer ')) return header.slice(7);
-  return request.cookies.get('token')?.value || null;
-}
-
-function getVendorIdentity(
-  request: NextRequest,
-): { userId: string; email: string; vendorId: string } | null {
-  const token = getToken(request);
-  if (!token || !process.env.JWT_SECRET) return null;
-
-  try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET) as {
-      userId?: string | number;
-      email?: string;
-      role?: string;
-    };
-    const role = String(payload.role || '').toUpperCase();
-    if (!payload.userId || role !== 'VENDOR') return null;
-
-    const userId = String(payload.userId);
-    const email = String(payload.email || '').toLowerCase();
-    return { userId, email, vendorId: `vendor_${userId}` };
-  } catch {
-    return null;
-  }
-}
 
 async function readWallets() {
   return readDataFile<CreditWallet[]>('vendor-credit-wallets.json', []);
@@ -108,17 +80,12 @@ function ensureWallet(
     return { wallet: wallets[idx], index: idx };
   }
 
-  const now = new Date().toISOString();
   const wallet: CreditWallet = {
     key: identity.vendorId,
     vendorId: identity.vendorId,
     vendorUserId: identity.userId,
     email: identity.email,
-    currentCredits: 0,
-    totalPurchased: 0,
-    totalUsed: 0,
-    lastTopUp: now,
-    updatedAt: now,
+    ...newVendorWalletBalanceFields(),
   };
   wallets.push(wallet);
   return { wallet, index: wallets.length - 1 };
@@ -147,7 +114,7 @@ async function syncVendorCredits(identity: { email: string; vendorId: string }, 
 
 export async function GET(request: NextRequest) {
   try {
-    const identity = getVendorIdentity(request);
+    const identity = await getVendorSession(request);
     if (!identity) {
       return NextResponse.json({ success: false, error: 'Unauthorized vendor access' }, { status: 401 });
     }
@@ -186,7 +153,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const identity = getVendorIdentity(request);
+    const identity = await getVendorSession(request);
     if (!identity) {
       return NextResponse.json({ success: false, error: 'Unauthorized vendor access' }, { status: 401 });
     }

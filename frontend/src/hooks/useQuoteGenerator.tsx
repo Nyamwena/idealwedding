@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useAuth } from '@/hooks/useAuth';
+import { loadUserJsonArray, saveUserJsonArray, PLANNING_PARTS } from '@/lib/userPlanningStorage';
 
 // Quote Generator Interfaces
 export interface QuoteRequest {
@@ -71,6 +73,7 @@ interface UseQuoteGeneratorReturn {
 }
 
 export function useQuoteGenerator(): UseQuoteGeneratorReturn {
+  const { user } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -79,6 +82,16 @@ export function useQuoteGenerator(): UseQuoteGeneratorReturn {
   const [quoteRequests, setQuoteRequests] = useState<QuoteRequest[]>([]);
   const [matchedVendors, setMatchedVendors] = useState<VendorMatch[]>([]);
   const [quoteResponses, setQuoteResponses] = useState<QuoteResponse[]>([]);
+
+  useEffect(() => {
+    if (!user) {
+      setQuoteRequests([]);
+      setQuoteResponses([]);
+      return;
+    }
+    setQuoteRequests(loadUserJsonArray<QuoteRequest>(user.id, PLANNING_PARTS.quoteGenRequests));
+    setQuoteResponses(loadUserJsonArray<QuoteResponse>(user.id, PLANNING_PARTS.quoteGenResponses));
+  }, [user]);
 
   // Mock vendor data for matching
   const mockVendors: VendorMatch[] = [
@@ -147,6 +160,7 @@ export function useQuoteGenerator(): UseQuoteGeneratorReturn {
 
   // Create Quote Request
   const createQuoteRequest = async (request: Omit<QuoteRequest, 'id' | 'createdAt' | 'status' | 'vendors'>) => {
+    if (!user) return;
     setIsLoading(true);
     setError(null);
     
@@ -161,7 +175,11 @@ export function useQuoteGenerator(): UseQuoteGeneratorReturn {
         vendors: []
       };
       
-      setQuoteRequests(prev => [...prev, newRequest]);
+      setQuoteRequests(prev => {
+        const next = [...prev, newRequest];
+        if (user) saveUserJsonArray(user.id, PLANNING_PARTS.quoteGenRequests, next);
+        return next;
+      });
       
       // Automatically search for matching vendors
       await searchVendors(request.category, request.location, request.budget);
@@ -275,7 +293,16 @@ export function useQuoteGenerator(): UseQuoteGeneratorReturn {
         createdAt: new Date().toISOString()
       }));
       
-      setQuoteResponses(prev => [...prev, ...responses]);
+      setQuoteResponses(prev => {
+        const next = [...prev, ...responses];
+        try {
+          const uid = user?.id;
+          if (uid != null) saveUserJsonArray(uid, PLANNING_PARTS.quoteGenResponses, next);
+        } catch {
+          /* ignore */
+        }
+        return next;
+      });
       
     } catch (err) {
       console.error('Error generating vendor responses:', err);
@@ -284,12 +311,15 @@ export function useQuoteGenerator(): UseQuoteGeneratorReturn {
 
   // Update Quote Request
   const updateQuoteRequest = async (id: string, request: Partial<QuoteRequest>) => {
+    if (!user) return;
     setIsLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      setQuoteRequests(prev => prev.map(r => 
-        r.id === id ? { ...r, ...request } : r
-      ));
+      await new Promise(resolve => setTimeout(resolve, 400));
+      setQuoteRequests(prev => {
+        const next = prev.map(r => (r.id === id ? { ...r, ...request } : r));
+        saveUserJsonArray(user.id, PLANNING_PARTS.quoteGenRequests, next);
+        return next;
+      });
     } catch (err) {
       setError('Failed to update quote request');
     } finally {
@@ -299,11 +329,20 @@ export function useQuoteGenerator(): UseQuoteGeneratorReturn {
 
   // Delete Quote Request
   const deleteQuoteRequest = async (id: string) => {
+    if (!user) return;
     setIsLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      setQuoteRequests(prev => prev.filter(r => r.id !== id));
-      setQuoteResponses(prev => prev.filter(r => r.quoteRequestId !== id));
+      await new Promise(resolve => setTimeout(resolve, 400));
+      setQuoteRequests(prev => {
+        const next = prev.filter(r => r.id !== id);
+        saveUserJsonArray(user.id, PLANNING_PARTS.quoteGenRequests, next);
+        return next;
+      });
+      setQuoteResponses(prev => {
+        const next = prev.filter(r => r.quoteRequestId !== id);
+        saveUserJsonArray(user.id, PLANNING_PARTS.quoteGenResponses, next);
+        return next;
+      });
     } catch (err) {
       setError('Failed to delete quote request');
     } finally {
@@ -313,23 +352,27 @@ export function useQuoteGenerator(): UseQuoteGeneratorReturn {
 
   // Accept Quote
   const acceptQuote = async (quoteId: string) => {
+    if (!user) return;
     setIsLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // Update quote response status
-      setQuoteResponses(prev => prev.map(r => 
-        r.id === quoteId ? { ...r, status: 'accepted' } : r
-      ));
-      
-      // Update quote request status
-      const quoteResponse = quoteResponses.find(r => r.id === quoteId);
-      if (quoteResponse) {
-        setQuoteRequests(prev => prev.map(r => 
-          r.id === quoteResponse.quoteRequestId ? { ...r, status: 'booked' } : r
-        ));
-      }
-      
+      await new Promise(resolve => setTimeout(resolve, 400));
+      setQuoteResponses(prevResp => {
+        const nextResp = prevResp.map(r =>
+          r.id === quoteId ? { ...r, status: 'accepted' as const } : r
+        );
+        const match = prevResp.find(r => r.id === quoteId);
+        if (match) {
+          setQuoteRequests(prevReq => {
+            const nextReq = prevReq.map(r =>
+              r.id === match.quoteRequestId ? { ...r, status: 'booked' as const } : r
+            );
+            saveUserJsonArray(user.id, PLANNING_PARTS.quoteGenRequests, nextReq);
+            return nextReq;
+          });
+        }
+        saveUserJsonArray(user.id, PLANNING_PARTS.quoteGenResponses, nextResp);
+        return nextResp;
+      });
     } catch (err) {
       setError('Failed to accept quote');
     } finally {
@@ -339,12 +382,17 @@ export function useQuoteGenerator(): UseQuoteGeneratorReturn {
 
   // Decline Quote
   const declineQuote = async (quoteId: string) => {
+    if (!user) return;
     setIsLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      setQuoteResponses(prev => prev.map(r => 
-        r.id === quoteId ? { ...r, status: 'declined' } : r
-      ));
+      await new Promise(resolve => setTimeout(resolve, 400));
+      setQuoteResponses(prev => {
+        const next = prev.map(r =>
+          r.id === quoteId ? { ...r, status: 'declined' as const } : r
+        );
+        saveUserJsonArray(user.id, PLANNING_PARTS.quoteGenResponses, next);
+        return next;
+      });
     } catch (err) {
       setError('Failed to decline quote');
     } finally {

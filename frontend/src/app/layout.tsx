@@ -4,7 +4,6 @@ import './globals.css';
 import { Providers } from './providers';
 import { Toaster } from 'react-hot-toast';
 import { TestCredentials } from '@/components/TestCredentials';
-import { AuthProvider } from '@/hooks/useAuth';
 
 const inter = Inter({ 
   subsets: ['latin'],
@@ -42,7 +41,6 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       </head>
       <body className="font-sans antialiased bg-gray-50">
-      <AuthProvider>
           <Providers>
               {children}
               <TestCredentials />
@@ -57,7 +55,6 @@ export default function RootLayout({
                   }}
               />
           </Providers>
-      </AuthProvider>
       </body>
     </html>
   );

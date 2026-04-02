@@ -22,7 +22,23 @@ import { SeatingChartPlanner } from '@/components/user/SeatingChartPlanner';
 export default function DashboardPage() {
   const { user,  logout } = useAuth();
   const router = useRouter();
+  type WelcomeTone = 'returning' | 'registered' | 'firstLogin';
+  const [welcomeTone, setWelcomeTone] = useState<WelcomeTone>('returning');
   const [activeTab, setActiveTab] = useState<'overview' | 'quotes' | 'guests' | 'budget' | 'map' | 'timeline' | 'notifications' | 'documents' | 'seating' | 'bookings'>('overview');
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('registered') === '1') {
+      setWelcomeTone('registered');
+      window.history.replaceState(null, '', '/dashboard');
+      return;
+    }
+    if (params.get('firstLogin') === '1') {
+      setWelcomeTone('firstLogin');
+      window.history.replaceState(null, '', '/dashboard');
+    }
+  }, []);
   
   // User data hooks
   const userData = useUserData();
@@ -71,10 +87,16 @@ export default function DashboardPage() {
         {/* Welcome Section */}
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold text-gray-900 mb-4">
-            Welcome back,
+            {welcomeTone === 'registered'
+              ? 'Thank you for registering!'
+              : welcomeTone === 'firstLogin'
+                ? 'Welcome! Thank you for joining us.'
+                : 'Welcome back,'}
           </h1>
           <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-            Plan your perfect wedding with our comprehensive tools and vendor network.
+            {welcomeTone === 'registered' || welcomeTone === 'firstLogin'
+              ? "We're glad you're here. Use the tools below to start planning your perfect wedding."
+              : 'Plan your perfect wedding with our comprehensive tools and vendor network.'}
           </p>
         </div>
 
@@ -114,9 +136,7 @@ export default function DashboardPage() {
           )}
           
           {activeTab === 'bookings' && (
-            <UserBookingsManager 
-              userData={userData}
-            />
+            <UserBookingsManager />
           )}
           
           {activeTab === 'guests' && (

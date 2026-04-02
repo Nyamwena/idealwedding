@@ -1,8 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { useAuth } from '@/hooks/useAuth';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 import { AdminBreadcrumb } from '@/components/admin/AdminBreadcrumb';
@@ -29,8 +27,6 @@ interface FAQ {
 }
 
 export default function VendorSupportPage() {
-  const { user,  isVendor, logout } = useAuth();
-  const router = useRouter();
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [faqs, setFaqs] = useState<FAQ[]>([]);
   const [loading, setLoading] = useState(true);
@@ -48,95 +44,38 @@ export default function VendorSupportPage() {
     const fetchSupportData = async () => {
       setLoading(true);
       try {
-        // Simulate API call
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        // Mock support tickets
-        const mockTickets: SupportTicket[] = [
-          {
-            id: '1',
-            subject: 'Payment processing issue',
-            description: 'I\'m having trouble receiving payments from customers. The payment status shows as pending but the customer says they paid.',
-            status: 'in_progress',
-            priority: 'high',
-            category: 'billing',
-            createdAt: '2024-09-24',
-            updatedAt: '2024-09-25',
-            response: 'We\'re investigating this payment issue. Our team is working with the payment processor to resolve this.',
-            responseDate: '2024-09-25',
-          },
-          {
-            id: '2',
-            subject: 'Calendar sync problem',
-            description: 'My calendar is not syncing properly with my Google Calendar. Some bookings are not showing up.',
-            status: 'open',
-            priority: 'medium',
-            category: 'technical',
-            createdAt: '2024-09-23',
-            updatedAt: '2024-09-23',
-          },
-          {
-            id: '3',
-            subject: 'Feature request: Bulk messaging',
-            description: 'It would be great to have a feature to send bulk messages to multiple customers at once.',
-            status: 'resolved',
-            priority: 'low',
-            category: 'feature_request',
-            createdAt: '2024-09-20',
-            updatedAt: '2024-09-22',
-            response: 'Thank you for the suggestion! We\'ve added this feature to our roadmap and will notify you when it\'s available.',
-            responseDate: '2024-09-22',
-          },
-        ];
+        const res = await fetch('/api/vendor/support', { credentials: 'include', cache: 'no-store' });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || 'Failed to load support');
 
-        // Mock FAQs
-        const mockFaqs: FAQ[] = [
-          {
-            id: '1',
-            question: 'How do I update my business profile?',
-            answer: 'Go to the Profile Management section in your vendor dashboard. You can update your business information, services, and contact details there.',
-            category: 'account',
-          },
-          {
-            id: '2',
-            question: 'How do I respond to quote requests?',
-            answer: 'Navigate to the Quote Management section. You can view pending quote requests and respond with your pricing and availability.',
-            category: 'technical',
-          },
-          {
-            id: '3',
-            question: 'When do I receive payments?',
-            answer: 'Payments are typically processed within 2-3 business days after service completion. You can track payment status in the Payments section.',
-            category: 'billing',
-          },
-          {
-            id: '4',
-            question: 'How do I set my availability?',
-            answer: 'Use the Calendar & Availability section to set your available time slots. You can also set recurring availability patterns.',
-            category: 'technical',
-          },
-          {
-            id: '5',
-            question: 'Can I customize my service packages?',
-            answer: 'Yes! In the Services & Portfolio section, you can create custom service packages with different pricing and duration options.',
-            category: 'account',
-          },
-        ];
+        const ticketRows = (json.data?.tickets || []) as any[];
+        const normalizedTickets: SupportTicket[] = ticketRows.map((t) => ({
+          id: String(t.id),
+          subject: String(t.subject),
+          description: String(t.description),
+          status: t.status as SupportTicket['status'],
+          priority: t.priority as SupportTicket['priority'],
+          category: t.category as SupportTicket['category'],
+          createdAt: String(t.createdAt),
+          updatedAt: String(t.updatedAt),
+          response: t.response ? String(t.response) : undefined,
+          responseDate: t.responseDate ? String(t.responseDate) : undefined,
+        }));
 
-        setTickets(mockTickets);
-        setFaqs(mockFaqs);
+        setTickets(normalizedTickets);
+        setFaqs((json.data?.faqs || []) as FAQ[]);
       } catch (error) {
         console.error('Failed to fetch support data:', error);
         toast.error('Failed to load support data');
+        setTickets([]);
+        setFaqs([]);
       } finally {
         setLoading(false);
       }
     };
 
-    if (isVendor) {
-      fetchSupportData();
-    }
-  }, [isVendor]);
+    fetchSupportData();
+  }, []);
 
   const handleSubmitTicket = async () => {
     if (!newTicket.subject || !newTicket.description) {
@@ -145,18 +84,33 @@ export default function VendorSupportPage() {
     }
 
     try {
+      const res = await fetch('/api/vendor/support', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          subject: newTicket.subject,
+          description: newTicket.description,
+          category: newTicket.category,
+          priority: newTicket.priority,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed to submit');
+
+      const t = json.data;
       const ticket: SupportTicket = {
-        id: Date.now().toString(),
-        subject: newTicket.subject,
-        description: newTicket.description,
-        status: 'open',
-        priority: newTicket.priority,
-        category: newTicket.category,
-        createdAt: new Date().toISOString().split('T')[0],
-        updatedAt: new Date().toISOString().split('T')[0],
+        id: String(t.id),
+        subject: String(t.subject),
+        description: String(t.description),
+        status: t.status as SupportTicket['status'],
+        priority: t.priority as SupportTicket['priority'],
+        category: t.category as SupportTicket['category'],
+        createdAt: String(t.createdAt),
+        updatedAt: String(t.updatedAt),
       };
 
-      setTickets(prev => [ticket, ...prev]);
+      setTickets((prev) => [ticket, ...prev]);
       setShowNewTicketModal(false);
       setNewTicket({
         subject: '',
@@ -190,11 +144,6 @@ export default function VendorSupportPage() {
     }
   };
 
-
-
-  if (!isVendor) {
-    return null; // Will redirect if not vendor
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-secondary-50">

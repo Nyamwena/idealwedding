@@ -1,8 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { useAuth } from '@/hooks/useAuth';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 import { AdminBreadcrumb } from '@/components/admin/AdminBreadcrumb';
@@ -37,8 +35,6 @@ interface PaymentStats {
 }
 
 export default function VendorPaymentsPage() {
-  const { user,  isVendor, logout } = useAuth();
-  const router = useRouter();
   const [payments, setPayments] = useState<Payment[]>([]);
   const [stats, setStats] = useState<PaymentStats>({
     totalEarnings: 0,
@@ -61,109 +57,32 @@ export default function VendorPaymentsPage() {
     const fetchPayments = async () => {
       setLoading(true);
       try {
-        // Simulate API call
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        // Mock payments data
-        const mockPayments: Payment[] = [
-          {
-            id: '1',
-            bookingId: 'BK001',
-            customerName: 'Sarah & John Smith',
-            serviceName: 'Wedding Photography Package',
-            amount: 2500,
-            platformFee: 125,
-            netAmount: 2375,
-            status: 'completed',
-            paymentMethod: 'credit_card',
-            transactionId: 'TXN_123456789',
-            paymentDate: '2024-09-24',
-            dueDate: '2024-09-24',
-            description: 'Wedding photography services - Dec 15, 2024',
-            createdAt: '2024-09-20',
-          },
-          {
-            id: '2',
-            bookingId: 'BK002',
-            customerName: 'Emily & Michael Johnson',
-            serviceName: 'Engagement Session',
-            amount: 400,
-            platformFee: 20,
-            netAmount: 380,
-            status: 'pending',
-            paymentMethod: 'bank_transfer',
-            transactionId: 'TXN_987654321',
-            paymentDate: '',
-            dueDate: '2024-10-20',
-            description: 'Engagement photo session - Oct 20, 2024',
-            createdAt: '2024-09-22',
-          },
-          {
-            id: '3',
-            bookingId: 'BK003',
-            customerName: 'Jessica & David Wilson',
-            serviceName: 'Event Videography',
-            amount: 1800,
-            platformFee: 90,
-            netAmount: 1710,
-            status: 'processing',
-            paymentMethod: 'stripe',
-            transactionId: 'TXN_456789123',
-            paymentDate: '2024-09-25',
-            dueDate: '2024-09-25',
-            description: 'Event videography services - Nov 10, 2024',
-            createdAt: '2024-09-18',
-          },
-          {
-            id: '4',
-            bookingId: 'BK004',
-            customerName: 'Amanda & Robert Brown',
-            serviceName: 'Wedding Photography Package',
-            amount: 2500,
-            platformFee: 125,
-            netAmount: 2375,
-            status: 'completed',
-            paymentMethod: 'paypal',
-            transactionId: 'TXN_789123456',
-            paymentDate: '2024-09-30',
-            dueDate: '2024-09-30',
-            description: 'Wedding photography services - Sep 30, 2024',
-            createdAt: '2024-08-15',
-          },
-          {
-            id: '5',
-            bookingId: 'BK005',
-            customerName: 'Lisa & Mark Davis',
-            serviceName: 'Portrait Photography',
-            amount: 300,
-            platformFee: 15,
-            netAmount: 285,
-            status: 'refunded',
-            paymentMethod: 'credit_card',
-            transactionId: 'TXN_321654987',
-            paymentDate: '2024-09-28',
-            dueDate: '2024-09-28',
-            description: 'Portrait session - cancelled due to emergency',
-            createdAt: '2024-09-10',
-          },
-        ];
+        const res = await fetch('/api/vendor/payments', { credentials: 'include', cache: 'no-store' });
+        const json = await res.json();
+        if (!res.ok) {
+          throw new Error(json.error || 'Failed to load payments');
+        }
+        const list = (json.data || []) as Payment[];
+        setPayments(list);
 
-        // Calculate stats
-        const totalEarnings = mockPayments.reduce((sum, payment) => sum + payment.amount, 0);
-        const monthlyEarnings = mockPayments
-          .filter(payment => {
-            const paymentDate = new Date(payment.paymentDate);
-            const currentDate = new Date();
-            return paymentDate.getMonth() === currentDate.getMonth() && 
-                   paymentDate.getFullYear() === currentDate.getFullYear();
+        const currentDate = new Date();
+        const totalEarnings = list.reduce((sum, payment) => sum + payment.amount, 0);
+        const monthlyEarnings = list
+          .filter((payment) => {
+            const src = payment.paymentDate || payment.createdAt;
+            if (!src) return false;
+            const paymentDate = new Date(src);
+            return (
+              paymentDate.getMonth() === currentDate.getMonth() &&
+              paymentDate.getFullYear() === currentDate.getFullYear()
+            );
           })
           .reduce((sum, payment) => sum + payment.amount, 0);
-        const pendingPayments = mockPayments.filter(payment => payment.status === 'pending').length;
-        const completedPayments = mockPayments.filter(payment => payment.status === 'completed').length;
-        const platformFees = mockPayments.reduce((sum, payment) => sum + payment.platformFee, 0);
-        const netEarnings = mockPayments.reduce((sum, payment) => sum + payment.netAmount, 0);
+        const pendingPayments = list.filter((payment) => payment.status === 'pending').length;
+        const completedPayments = list.filter((payment) => payment.status === 'completed').length;
+        const platformFees = list.reduce((sum, payment) => sum + payment.platformFee, 0);
+        const netEarnings = list.reduce((sum, payment) => sum + payment.netAmount, 0);
 
-        setPayments(mockPayments);
         setStats({
           totalEarnings,
           monthlyEarnings,
@@ -175,15 +94,22 @@ export default function VendorPaymentsPage() {
       } catch (error) {
         console.error('Failed to fetch payments:', error);
         toast.error('Failed to load payments');
+        setPayments([]);
+        setStats({
+          totalEarnings: 0,
+          monthlyEarnings: 0,
+          pendingPayments: 0,
+          completedPayments: 0,
+          platformFees: 0,
+          netEarnings: 0,
+        });
       } finally {
         setLoading(false);
       }
     };
 
-    if (isVendor) {
-      fetchPayments();
-    }
-  }, [isVendor]);
+    fetchPayments();
+  }, []);
 
   const filteredPayments = payments.filter(payment => {
     const matchesSearch = payment.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -248,11 +174,6 @@ export default function VendorPaymentsPage() {
     }
   };
 
-
-
-  if (!isVendor) {
-    return null; // Will redirect if not vendor
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-secondary-50">

@@ -3,6 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readDataFile, writeDataFile } from '@/lib/dataFileStore';
 import { verifyToken } from '@/lib/auth';
+import { newVendorWalletBalanceFields } from '@/lib/vendorWalletStarter';
 
 type CreditWallet = {
     key: string;
@@ -133,11 +134,7 @@ export async function POST(
                 key: vendorId,
                 vendorId,
                 email,
-                currentCredits: 0,
-                totalPurchased: 0,
-                totalUsed: 0,
-                lastTopUp: now,
-                updatedAt: now,
+                ...newVendorWalletBalanceFields(),
             });
             walletIndex = wallets.length - 1;
         }

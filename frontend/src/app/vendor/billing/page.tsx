@@ -1,9 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useMemo } from 'react';
 import Link from 'next/link';
-import { useAuth } from '@/hooks/useAuth';
 import { useVendorCredits } from '@/hooks/useVendorCredits';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
@@ -12,7 +10,7 @@ import { VendorTopMenu } from '@/components/vendor/VendorTopMenu';
 
 interface BillingHistory {
   id: string;
-  type: 'credit_purchase' | 'subscription' | 'commission' | 'refund';
+  type: 'credit_purchase' | 'subscription' | 'commission' | 'refund' | 'credit_usage';
   description: string;
   amount: number;
   date: string;
@@ -20,81 +18,45 @@ interface BillingHistory {
   paymentMethod?: string;
 }
 
+function mapTransactionToBillingHistory(tx: {
+  id: string;
+  type: string;
+  amount: number;
+  description: string;
+  timestamp: string;
+}): BillingHistory {
+  let type: BillingHistory['type'] = 'credit_purchase';
+  if (tx.type === 'usage') type = 'credit_usage';
+  else if (tx.type === 'refund') type = 'refund';
+  else if (tx.type === 'purchase' || tx.type === 'admin_add') type = 'credit_purchase';
+
+  return {
+    id: tx.id,
+    type,
+    description: tx.description,
+    amount: tx.amount,
+    date: tx.timestamp,
+    status: 'completed',
+  };
+}
+
 export default function VendorBillingPage() {
-  const { user,  isVendor } = useAuth();
-  const { creditData, transactions, loading: creditsLoading, purchaseCredits } = useVendorCredits();
-  const router = useRouter();
-  const [billingHistory, setBillingHistory] = useState<BillingHistory[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { creditData, transactions, loading: creditsLoading, purchaseCredits, refetch } = useVendorCredits();
   const [showCreditModal, setShowCreditModal] = useState(false);
   const [selectedPackage, setSelectedPackage] = useState<number | null>(null);
 
-
-
-  useEffect(() => {
-    fetchBillingHistory();
-  }, []);
-
-  const fetchBillingHistory = async () => {
-    setLoading(true);
-    try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Mock billing history
-      const mockHistory: BillingHistory[] = [
-        {
-          id: 'bill_001',
-          type: 'credit_purchase',
-          description: 'Credit Package - 100 Credits',
-          amount: 100,
-          date: '2024-09-15T00:00:00Z',
-          status: 'completed',
-          paymentMethod: 'Credit Card ending in 4242',
-        },
-        {
-          id: 'bill_002',
-          type: 'commission',
-          description: 'Commission from Sarah & John booking',
-          amount: -125,
-          date: '2024-09-10T00:00:00Z',
-          status: 'completed',
-        },
-        {
-          id: 'bill_003',
-          type: 'credit_purchase',
-          description: 'Credit Package - 50 Credits',
-          amount: 50,
-          date: '2024-08-20T00:00:00Z',
-          status: 'completed',
-          paymentMethod: 'PayPal',
-        },
-        {
-          id: 'bill_004',
-          type: 'subscription',
-          description: 'Premium Subscription - Monthly',
-          amount: 49.99,
-          date: '2024-08-01T00:00:00Z',
-          status: 'completed',
-          paymentMethod: 'Credit Card ending in 4242',
-        },
-      ];
-
-      setBillingHistory(mockHistory);
-    } catch (error) {
-      console.error('Failed to fetch billing history:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const billingHistory = useMemo(() => {
+    return [...transactions]
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+      .map(mapTransactionToBillingHistory);
+  }, [transactions]);
 
   const handlePurchaseCredits = async (amount: number) => {
     const success = await purchaseCredits(amount);
     if (success) {
       setShowCreditModal(false);
       setSelectedPackage(null);
-      // Refresh billing history
-      fetchBillingHistory();
+      await refetch();
     }
   };
 
@@ -103,6 +65,7 @@ export default function VendorBillingPage() {
       case 'credit_purchase': return '💳';
       case 'subscription': return '🔄';
       case 'commission': return '💰';
+      case 'credit_usage': return '📤';
       case 'refund': return '↩️';
       default: return '📄';
     }
@@ -116,12 +79,6 @@ export default function VendorBillingPage() {
       default: return 'text-gray-600';
     }
   };
-
-
-
-  if (!isVendor) {
-    return null;
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-secondary-50">
@@ -236,7 +193,7 @@ export default function VendorBillingPage() {
             <h3 className="text-lg font-semibold text-gray-900">Billing History</h3>
           </div>
           
-          {loading ? (
+          {creditsLoading ? (
             <div className="flex items-center justify-center py-12">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
               <span className="ml-3 text-gray-600">Loading billing history...</span>
@@ -266,8 +223,8 @@ export default function VendorBillingPage() {
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className={`font-semibold ${bill.amount > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                        {bill.amount > 0 ? '-' : '+'}${Math.abs(bill.amount).toFixed(2)}
+                      <p className={`font-semibold ${bill.amount >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {bill.amount > 0 ? '+' : ''}{bill.amount} credits
                       </p>
                     </div>
                   </div>

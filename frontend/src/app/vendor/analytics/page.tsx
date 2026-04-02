@@ -1,9 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useAuth } from '@/hooks/useAuth';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 import { AdminBreadcrumb } from '@/components/admin/AdminBreadcrumb';
@@ -39,8 +37,6 @@ interface AnalyticsData {
 }
 
 export default function VendorAnalyticsPage() {
-  const { user,  isVendor } = useAuth();
-  const router = useRouter();
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedPeriod, setSelectedPeriod] = useState('30d');
@@ -54,7 +50,9 @@ export default function VendorAnalyticsPage() {
   const fetchAnalytics = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/vendor/analytics?period=${selectedPeriod}`);
+      const response = await fetch(`/api/vendor/analytics?period=${selectedPeriod}`, {
+        credentials: 'include',
+      });
       const result = await response.json();
 
       if (!response.ok) {
@@ -70,11 +68,6 @@ export default function VendorAnalyticsPage() {
     }
   };
 
-
-
-  if (!isVendor) {
-    return null;
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-secondary-50">

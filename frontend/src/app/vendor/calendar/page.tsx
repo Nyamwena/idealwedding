@@ -1,8 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { useAuth } from '@/hooks/useAuth';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 import { AdminBreadcrumb } from '@/components/admin/AdminBreadcrumb';
@@ -32,8 +30,6 @@ interface AvailabilitySlot {
 }
 
 export default function VendorCalendarPage() {
-  const { user, isVendor, logout } = useAuth();
-  const router = useRouter();
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [availability, setAvailability] = useState<AvailabilitySlot[]>([]);
   const [loading, setLoading] = useState(true);
@@ -64,97 +60,49 @@ export default function VendorCalendarPage() {
     const fetchCalendarData = async () => {
       setLoading(true);
       try {
-        // Simulate API call
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        // Mock calendar events
-        const mockEvents: CalendarEvent[] = [
-          {
-            id: '1',
-            title: 'Wedding Photography - Sarah & John',
-            customerName: 'Sarah & John Smith',
-            serviceName: 'Wedding Photography Package',
-            start: '2024-12-15T14:00:00',
-            end: '2024-12-15T22:00:00',
-            status: 'confirmed',
-            location: 'Grand Ballroom, New York',
-            notes: 'Focus on candid moments and family photos',
-            color: 'bg-blue-500',
-          },
-          {
-            id: '2',
-            title: 'Engagement Session - Emily & Michael',
-            customerName: 'Emily & Michael Johnson',
-            serviceName: 'Engagement Session',
-            start: '2024-10-20T16:00:00',
-            end: '2024-10-20T18:00:00',
-            status: 'confirmed',
-            location: 'Central Park, New York',
-            notes: 'Sunset photos preferred',
-            color: 'bg-green-500',
-          },
-          {
-            id: '3',
-            title: 'Event Videography - Jessica & David',
-            customerName: 'Jessica & David Wilson',
-            serviceName: 'Event Videography',
-            start: '2024-11-10T18:00:00',
-            end: '2024-11-10T00:00:00',
-            status: 'pending',
-            location: 'Riverside Venue, Brooklyn',
-            notes: 'Highlight reel and full ceremony video',
-            color: 'bg-yellow-500',
-          },
-          {
-            id: '4',
-            title: 'Portrait Session - Lisa & Mark',
-            customerName: 'Lisa & Mark Davis',
-            serviceName: 'Portrait Photography',
-            start: '2024-10-05T14:00:00',
-            end: '2024-10-05T15:00:00',
-            status: 'completed',
-            location: 'Studio Location',
-            notes: 'Family portraits',
-            color: 'bg-gray-500',
-          },
-        ];
+        const res = await fetch('/api/vendor/calendar', { credentials: 'include', cache: 'no-store' });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || 'Failed to load calendar');
 
-        // Mock availability slots
-        const mockAvailability: AvailabilitySlot[] = [
-          {
-            id: '1',
-            date: '2024-10-01',
-            startTime: '09:00',
-            endTime: '17:00',
-            isAvailable: true,
-            isRecurring: false,
-            recurringDays: [],
-          },
-          {
-            id: '2',
-            date: '2024-10-02',
-            startTime: '09:00',
-            endTime: '17:00',
-            isAvailable: true,
-            isRecurring: false,
-            recurringDays: [],
-          },
-        ];
+        const rawEvents = json.data?.events || [];
+        const normalized: CalendarEvent[] = rawEvents.map((e: any) => ({
+          id: String(e.id),
+          title: String(e.title),
+          customerName: String(e.customerName || ''),
+          serviceName: String(e.serviceName || ''),
+          start: String(e.start),
+          end: String(e.end),
+          status: e.status as CalendarEvent['status'],
+          location: String(e.location || ''),
+          notes: String(e.notes || ''),
+          color: String(e.color || 'bg-blue-500'),
+        }));
 
-        setEvents(mockEvents);
-        setAvailability(mockAvailability);
+        const rawAvail = json.data?.availability || [];
+        const availSlots: AvailabilitySlot[] = rawAvail.map((a: any) => ({
+          id: String(a.id),
+          date: String(a.date),
+          startTime: String(a.startTime || '09:00'),
+          endTime: String(a.endTime || '17:00'),
+          isAvailable: a.isAvailable !== false,
+          isRecurring: Boolean(a.isRecurring),
+          recurringDays: Array.isArray(a.recurringDays) ? a.recurringDays : [],
+        }));
+
+        setEvents(normalized);
+        setAvailability(availSlots);
       } catch (error) {
         console.error('Failed to fetch calendar data:', error);
         toast.error('Failed to load calendar data');
+        setEvents([]);
+        setAvailability([]);
       } finally {
         setLoading(false);
       }
     };
 
-    if (isVendor) {
-      fetchCalendarData();
-    }
-  }, [isVendor]);
+    fetchCalendarData();
+  }, []);
 
   const getDaysInMonth = (date: Date) => {
     const year = date.getFullYear();
@@ -196,20 +144,45 @@ export default function VendorCalendarPage() {
     }
 
     try {
+      const start = `${selectedDate}T${newEvent.startTime}:00`;
+      const end = `${selectedDate}T${newEvent.endTime}:00`;
+      const res = await fetch('/api/vendor/calendar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          type: 'event',
+          event: {
+            title: newEvent.title,
+            customerName: newEvent.customerName,
+            serviceName: newEvent.serviceName,
+            start,
+            end,
+            status: 'confirmed',
+            location: newEvent.location,
+            notes: newEvent.notes,
+            color: 'bg-blue-500',
+          },
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed to add event');
+
+      const e = json.data;
       const event: CalendarEvent = {
-        id: Date.now().toString(),
-        title: newEvent.title,
-        customerName: newEvent.customerName,
-        serviceName: newEvent.serviceName,
-        start: `${selectedDate}T${newEvent.startTime}:00`,
-        end: `${selectedDate}T${newEvent.endTime}:00`,
-        status: 'confirmed',
-        location: newEvent.location,
-        notes: newEvent.notes,
-        color: 'bg-blue-500',
+        id: String(e.id),
+        title: String(e.title),
+        customerName: String(e.customerName || ''),
+        serviceName: String(e.serviceName || ''),
+        start: String(e.start),
+        end: String(e.end),
+        status: e.status as CalendarEvent['status'],
+        location: String(e.location || ''),
+        notes: String(e.notes || ''),
+        color: String(e.color || 'bg-blue-500'),
       };
 
-      setEvents(prev => [...prev, event]);
+      setEvents((prev) => [...prev, event]);
       setShowAddEventModal(false);
       setNewEvent({
         title: '',
@@ -233,17 +206,36 @@ export default function VendorCalendarPage() {
     }
 
     try {
+      const res = await fetch('/api/vendor/calendar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          type: 'availability',
+          availability: {
+            date: selectedDate,
+            startTime: newAvailability.startTime,
+            endTime: newAvailability.endTime,
+            isRecurring: newAvailability.isRecurring,
+            recurringDays: newAvailability.recurringDays,
+          },
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed to add availability');
+
+      const a = json.data;
       const slot: AvailabilitySlot = {
-        id: Date.now().toString(),
-        date: selectedDate,
-        startTime: newAvailability.startTime,
-        endTime: newAvailability.endTime,
-        isAvailable: true,
-        isRecurring: newAvailability.isRecurring,
-        recurringDays: newAvailability.recurringDays,
+        id: String(a.id),
+        date: String(a.date),
+        startTime: String(a.startTime),
+        endTime: String(a.endTime),
+        isAvailable: a.isAvailable !== false,
+        isRecurring: Boolean(a.isRecurring),
+        recurringDays: Array.isArray(a.recurringDays) ? a.recurringDays : [],
       };
 
-      setAvailability(prev => [...prev, slot]);
+      setAvailability((prev) => [...prev, slot]);
       setShowAvailabilityModal(false);
       setNewAvailability({
         startTime: '',
@@ -269,11 +261,6 @@ export default function VendorCalendarPage() {
     });
   };
 
-
-
-  if (!isVendor) {
-    return null; // Will redirect if not vendor
-  }
 
   const days = getDaysInMonth(currentDate);
   const monthNames = [
@@ -375,7 +362,7 @@ export default function VendorCalendarPage() {
               return (
                 <div
                   key={day.toISOString()}
-                  className={`p-2 h-24 border border-gray-200 rounded cursor-pointer hover:bg-gray-50 ${
+                  className={`relative p-2 h-24 border border-gray-200 rounded cursor-pointer hover:bg-gray-50 ${
                     isToday ? 'bg-blue-50 border-blue-300' : ''
                   } ${isPast ? 'bg-gray-50' : ''}`}
                   onClick={() => setSelectedDate(day.toISOString().split('T')[0])}

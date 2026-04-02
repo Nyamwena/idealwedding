@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useAuth } from '@/hooks/useAuth';
 
 interface UserBooking {
   id: string;
@@ -24,11 +25,8 @@ interface UserBooking {
   updatedAt: string;
 }
 
-interface UserBookingsManagerProps {
-  userData: any;
-}
-
-export function UserBookingsManager({ userData }: UserBookingsManagerProps) {
+export function UserBookingsManager() {
+  const { user } = useAuth();
   const [bookings, setBookings] = useState<UserBooking[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('all');
@@ -39,23 +37,28 @@ export function UserBookingsManager({ userData }: UserBookingsManagerProps) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!user) {
+      setBookings([]);
+      setLoading(false);
+      return;
+    }
     fetchUserBookings();
-  }, []);
+  }, [user?.id]);
 
   const fetchUserBookings = async () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch('/api/user/bookings');
+      const response = await fetch('/api/user/bookings', { credentials: 'include' });
       const result = await response.json();
 
       if (!response.ok) {
         throw new Error(result.error || 'Failed to fetch bookings');
       }
 
-      setBookings(result.data);
-    } catch (error) {
-      console.error('Failed to fetch user bookings:', error);
+      setBookings(Array.isArray(result.data) ? result.data : []);
+    } catch (err) {
+      console.error('Failed to fetch user bookings:', err);
       setError('Failed to load your bookings. Please try again.');
       setBookings([]);
     } finally {
@@ -71,6 +74,7 @@ export function UserBookingsManager({ userData }: UserBookingsManagerProps) {
     try {
       const response = await fetch(`/api/user/bookings/${bookingId}`, {
         method: 'PUT',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
         },
@@ -89,9 +93,9 @@ export function UserBookingsManager({ userData }: UserBookingsManagerProps) {
       ));
 
       setSuccessMessage(`Booking ${action} successfully!`);
-    } catch (error) {
-      console.error('Failed to update booking:', error);
-      setError(error.message || 'Failed to update booking. Please try again.');
+    } catch (err) {
+      console.error('Failed to update booking:', err);
+      setError(err instanceof Error ? err.message : 'Failed to update booking. Please try again.');
     } finally {
       setActionLoading(null);
     }

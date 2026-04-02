@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useUserData, WeddingDetails, BudgetItem, SelectedVendor, Guest } from '@/hooks/useUserData';
+import { useUserData, BudgetItem, SelectedVendor, Guest } from '@/hooks/useUserData';
 import { useQuoteGenerator, QuoteRequest, QuoteResponse } from '@/hooks/useQuoteGenerator';
 
 interface UserDashboardWidgetsProps {
@@ -21,10 +21,26 @@ interface RankedAd {
   cost?: number;
 }
 
+function formatOverviewDate(iso?: string): string {
+  if (!iso?.trim()) return 'Not set';
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? 'Not set' : d.toLocaleDateString();
+}
+
 export function UserDashboardWidgets({ userData, quoteGenerator }: UserDashboardWidgetsProps) {
-  const { weddingDetails, budgetItems, selectedVendors, guests } = userData;
+  const { weddingDetails, updateWeddingDetails, budgetItems, selectedVendors, guests } = userData;
   const { quoteRequests, quoteResponses } = quoteGenerator;
   const [topAds, setTopAds] = useState<RankedAd[]>([]);
+  const [weddingFormOpen, setWeddingFormOpen] = useState(false);
+  const [weddingForm, setWeddingForm] = useState({
+    weddingDate: '',
+    venue: '',
+    guestCount: '',
+    theme: '',
+    location: '',
+    notes: '',
+  });
+  const [weddingSaveLoading, setWeddingSaveLoading] = useState(false);
 
   // Calculate budget summary
   const totalBudget = budgetItems.reduce((sum, item) => sum + item.allocated, 0);
@@ -63,6 +79,43 @@ export function UserDashboardWidgets({ userData, quoteGenerator }: UserDashboard
     loadTopAds();
   }, []);
 
+  const openWeddingForm = () => {
+    const wd = weddingDetails;
+    setWeddingForm({
+      weddingDate: wd?.weddingDate ? wd.weddingDate.slice(0, 10) : '',
+      venue: wd?.venue ?? '',
+      guestCount: wd?.guestCount !== undefined ? String(wd.guestCount) : '',
+      theme: wd?.theme ?? '',
+      location: wd?.location ?? '',
+      notes: wd?.notes ?? '',
+    });
+    setWeddingFormOpen(true);
+  };
+
+  const handleWeddingFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setWeddingSaveLoading(true);
+    try {
+      const gc = weddingForm.guestCount.trim();
+      let guestCount: number | undefined;
+      if (gc !== '') {
+        const n = parseInt(gc, 10);
+        if (Number.isFinite(n) && n >= 0) guestCount = n;
+      }
+      await updateWeddingDetails({
+        weddingDate: weddingForm.weddingDate.trim() || undefined,
+        venue: weddingForm.venue.trim() || undefined,
+        guestCount,
+        theme: weddingForm.theme.trim() || undefined,
+        location: weddingForm.location.trim() || undefined,
+        notes: weddingForm.notes.trim() || undefined,
+      });
+      setWeddingFormOpen(false);
+    } finally {
+      setWeddingSaveLoading(false);
+    }
+  };
+
   const handleAdClick = async (ad: RankedAd) => {
     try {
       const response = await fetch(`/api/advertisements/${ad.id}/click`, { method: 'POST' });
@@ -79,32 +132,135 @@ export function UserDashboardWidgets({ userData, quoteGenerator }: UserDashboard
 
   return (
     <div className="space-y-8">
-      {/* Wedding Overview */}
-      {weddingDetails && (
-        <div className="bg-white rounded-2xl shadow-lg p-6">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6">Wedding Overview</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div className="text-center">
-              <div className="text-3xl mb-2">📅</div>
-              <h3 className="font-semibold text-gray-900">Wedding Date</h3>
-              <p className="text-gray-600">{new Date(weddingDetails.weddingDate).toLocaleDateString()}</p>
-            </div>
-            <div className="text-center">
-              <div className="text-3xl mb-2">🏛️</div>
-              <h3 className="font-semibold text-gray-900">Venue</h3>
-              <p className="text-gray-600">{weddingDetails.venue}</p>
-            </div>
-            <div className="text-center">
-              <div className="text-3xl mb-2">👥</div>
-              <h3 className="font-semibold text-gray-900">Guest Count</h3>
-              <p className="text-gray-600">{weddingDetails.guestCount} guests</p>
-            </div>
-            <div className="text-center">
-              <div className="text-3xl mb-2">🎨</div>
-              <h3 className="font-semibold text-gray-900">Theme</h3>
-              <p className="text-gray-600">{weddingDetails.theme}</p>
-            </div>
+      {/* Wedding Overview — values come from your saved details (browser storage per account) */}
+      <div className="bg-white rounded-2xl shadow-lg p-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
+          <h2 className="text-2xl font-bold text-gray-900">Wedding Overview</h2>
+          <button
+            type="button"
+            onClick={openWeddingForm}
+            className="btn-primary btn-md hover-lift shrink-0 self-start sm:self-auto"
+          >
+            {weddingDetails ? 'Edit details' : 'Add wedding details'}
+          </button>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="text-center">
+            <div className="text-3xl mb-2">📅</div>
+            <h3 className="font-semibold text-gray-900">Wedding Date</h3>
+            <p className="text-gray-600">{formatOverviewDate(weddingDetails?.weddingDate)}</p>
           </div>
+          <div className="text-center">
+            <div className="text-3xl mb-2">🏛️</div>
+            <h3 className="font-semibold text-gray-900">Venue</h3>
+            <p className="text-gray-600">{weddingDetails?.venue?.trim() ? weddingDetails.venue : 'Not set'}</p>
+          </div>
+          <div className="text-center">
+            <div className="text-3xl mb-2">👥</div>
+            <h3 className="font-semibold text-gray-900">Guest Count</h3>
+            <p className="text-gray-600">
+              {weddingDetails?.guestCount === undefined
+                ? 'Not set'
+                : `${weddingDetails.guestCount} guest${weddingDetails.guestCount === 1 ? '' : 's'}`}
+            </p>
+          </div>
+          <div className="text-center">
+            <div className="text-3xl mb-2">🎨</div>
+            <h3 className="font-semibold text-gray-900">Theme</h3>
+            <p className="text-gray-600">{weddingDetails?.theme?.trim() ? weddingDetails.theme : 'Not set'}</p>
+          </div>
+        </div>
+      </div>
+
+      {weddingFormOpen && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="wedding-overview-form-title">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/40"
+            aria-label="Close"
+            onClick={() => setWeddingFormOpen(false)}
+          />
+          <form
+            onSubmit={handleWeddingFormSubmit}
+            className="relative z-10 w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="wedding-overview-form-title" className="text-xl font-bold text-gray-900 mb-4">
+              Wedding details
+            </h3>
+            <p className="text-sm text-gray-600 mb-4">
+              These fields power your overview. Leave anything blank if you have not decided yet.
+            </p>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Wedding date</label>
+                <input
+                  type="date"
+                  className="input w-full"
+                  value={weddingForm.weddingDate}
+                  onChange={(e) => setWeddingForm((f) => ({ ...f, weddingDate: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Venue</label>
+                <input
+                  type="text"
+                  className="input w-full"
+                  placeholder="e.g. Rosewood Estate"
+                  value={weddingForm.venue}
+                  onChange={(e) => setWeddingForm((f) => ({ ...f, venue: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Expected guest count</label>
+                <input
+                  type="number"
+                  min={0}
+                  className="input w-full"
+                  placeholder="e.g. 120"
+                  value={weddingForm.guestCount}
+                  onChange={(e) => setWeddingForm((f) => ({ ...f, guestCount: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Theme / style</label>
+                <input
+                  type="text"
+                  className="input w-full"
+                  placeholder="e.g. Garden, modern minimalist"
+                  value={weddingForm.theme}
+                  onChange={(e) => setWeddingForm((f) => ({ ...f, theme: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Location (optional)</label>
+                <input
+                  type="text"
+                  className="input w-full"
+                  placeholder="City or region"
+                  value={weddingForm.location}
+                  onChange={(e) => setWeddingForm((f) => ({ ...f, location: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Notes (optional)</label>
+                <textarea
+                  className="input w-full min-h-[88px] resize-y"
+                  placeholder="Anything else you want to remember"
+                  value={weddingForm.notes}
+                  onChange={(e) => setWeddingForm((f) => ({ ...f, notes: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="mt-6 flex flex-wrap gap-3 justify-end">
+              <button type="button" className="btn-ghost btn-md" onClick={() => setWeddingFormOpen(false)}>
+                Cancel
+              </button>
+              <button type="submit" className="btn-primary btn-md" disabled={weddingSaveLoading}>
+                {weddingSaveLoading ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </form>
         </div>
       )}
 
@@ -137,7 +293,7 @@ export function UserDashboardWidgets({ userData, quoteGenerator }: UserDashboard
             <div className="w-full bg-gray-200 rounded-full h-2">
               <div 
                 className="bg-primary-600 h-2 rounded-full transition-all duration-300"
-                style={{ width: `${(totalSpent / totalBudget) * 100}%` }}
+                style={{ width: `${totalBudget > 0 ? Math.min(100, (totalSpent / totalBudget) * 100) : 0}%` }}
               ></div>
             </div>
           </div>

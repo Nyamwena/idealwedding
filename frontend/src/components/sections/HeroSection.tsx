@@ -24,19 +24,7 @@ export function HeroSection() {
 
       <div className="container-modern section-padding">
         <div className="mx-auto max-w-2xl flex-shrink-0 lg:mx-0 lg:max-w-xl lg:pt-8">
-          <div className="mt-24 sm:mt-32 lg:mt-16">
-            <div className="inline-flex items-center space-x-6 animate-fade-in">
-              <span className="rounded-full bg-gradient-to-r from-primary-500/10 to-secondary-500/10 px-4 py-2 text-sm font-semibold leading-6 text-amber-50 ring-1 ring-inset ring-primary-500/20">
-                ✨ What's new
-              </span>
-              <span className="inline-flex items-center space-x-2 text-sm font-medium leading-6 text-blue-50">
-                <span>Just launched</span>
-                <span className="h-5 w-5 text-primary-400 animate-bounce-gentle">→</span>
-              </span>
-            </div>
-          </div>
-          
-          <h1 className="mt-10 text-4xl font-bold tracking-tight text-gray-900 sm:text-6xl lg:text-7xl animate-slide-up">
+          <h1 className="mt-24 sm:mt-32 lg:mt-16 text-4xl font-bold tracking-tight text-gray-900 sm:text-6xl lg:text-7xl animate-slide-up">
             Your Dream Wedding,{' '}
             <span className="text-amber-400">Made Perfect</span>
           </h1>
@@ -47,18 +35,14 @@ export function HeroSection() {
             Let us make your wedding planning journey magical.
           </p>
           
-          <div className="mt-10 flex items-center gap-x-6 animate-fade-in">
-            <Link href="/register">
-              <button className="btn-primary btn-lg hover-lift">
-                Start Planning
-                <span className="ml-2 text-xl">💒</span>
-              </button>
+          <div className="relative z-10 mt-10 flex flex-wrap items-center gap-x-6 gap-y-4 animate-fade-in">
+            <Link href="/register" className="btn-primary btn-lg hover-lift">
+              Start Planning
+              <span className="ml-2 text-xl">💒</span>
             </Link>
-            <Link href="/how-it-works">
-              <button className="btn-outline btn-lg hover-lift">
-                Learn More
-                <span className="ml-2">→</span>
-              </button>
+            <Link href="/how-it-works" className="btn-outline btn-lg hover-lift">
+              Learn More
+              <span className="ml-2">→</span>
             </Link>
           </div>
         </div>

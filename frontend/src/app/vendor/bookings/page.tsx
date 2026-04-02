@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useAuth } from '@/hooks/useAuth';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 import { AdminBreadcrumb } from '@/components/admin/AdminBreadcrumb';
@@ -27,7 +26,6 @@ interface VendorBooking {
 }
 
 export default function VendorBookingsPage() {
-  const { user,  isVendor } = useAuth();
   const router = useRouter();
   const [bookings, setBookings] = useState<VendorBooking[]>([]);
   const [loading, setLoading] = useState(true);
@@ -46,6 +44,7 @@ export default function VendorBookingsPage() {
     try {
       const response = await fetch('/api/vendor/bookings', {
         credentials: 'include',
+        cache: 'no-store',
       });
       const result = await response.json();
       if (!response.ok) {
@@ -106,11 +105,6 @@ export default function VendorBookingsPage() {
     }
   };
 
-
-
-  if (!isVendor) {
-    return null;
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-secondary-50">

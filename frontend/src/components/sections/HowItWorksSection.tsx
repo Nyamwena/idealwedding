@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 
 export function HowItWorksSection() {
   const steps = [
@@ -89,10 +90,10 @@ export function HowItWorksSection() {
         </div>
 
         <div className="text-center mt-16">
-          <button className="btn-primary btn-lg hover-lift animate-fade-in">
+          <Link href="/register" className="btn-primary btn-lg hover-lift animate-fade-in inline-flex">
             Get Started Today
             <span className="ml-2 text-xl">💒</span>
-          </button>
+          </Link>
         </div>
 
         {/* Additional info cards */}

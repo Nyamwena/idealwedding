@@ -12,7 +12,7 @@ export default function PricingPage() {
     {
       name: 'Free',
       price: '$0',
-      period: 'forever',
+      billingNote: 'Forever free — no subscription',
       description: 'Perfect for getting started with wedding planning',
       features: [
         'Browse vendor profiles',
@@ -22,12 +22,13 @@ export default function PricingPage() {
         'Email support'
       ],
       popular: false,
-      cta: 'Get Started Free'
+      cta: 'Get Started Free',
+      ctaHref: '/register',
     },
     {
       name: 'Premium',
       price: '$29',
-      period: 'per month',
+      billingNote: 'Once-off payment — not a subscription',
       description: 'Everything you need for comprehensive wedding planning',
       features: [
         'Everything in Free',
@@ -40,12 +41,13 @@ export default function PricingPage() {
         'Vendor reviews & ratings'
       ],
       popular: true,
-      cta: 'Start Premium Trial'
+      cta: 'Get Premium',
+      ctaHref: '/register',
     },
     {
       name: 'Ultimate',
       price: '$99',
-      period: 'one-time',
+      billingNote: 'Once-off payment — not a subscription',
       description: 'Complete wedding planning solution with concierge service',
       features: [
         'Everything in Premium',
@@ -58,7 +60,8 @@ export default function PricingPage() {
         'Lifetime access to tools'
       ],
       popular: false,
-      cta: 'Get Ultimate Plan'
+      cta: 'Get Ultimate Plan',
+      ctaHref: '/register',
     }
   ];
 
@@ -76,7 +79,8 @@ export default function PricingPage() {
         'Email support'
       ],
       popular: false,
-      cta: 'Start Basic Plan'
+      cta: 'Start Basic Plan',
+      ctaHref: '/register',
     },
     {
       name: 'Professional',
@@ -94,7 +98,8 @@ export default function PricingPage() {
         'Featured in search results'
       ],
       popular: true,
-      cta: 'Start Professional'
+      cta: 'Start Professional',
+      ctaHref: '/register',
     },
     {
       name: 'Enterprise',
@@ -112,7 +117,8 @@ export default function PricingPage() {
         'Priority placement'
       ],
       popular: false,
-      cta: 'Contact Sales'
+      cta: 'Contact Sales',
+      ctaHref: '/contact',
     }
   ];
 
@@ -176,7 +182,7 @@ export default function PricingPage() {
                     <h3 className="text-2xl font-bold text-gray-900 mb-2">{plan.name}</h3>
                     <div className="mb-4">
                       <span className="text-4xl font-bold text-gray-900">{plan.price}</span>
-                      <span className="text-gray-600">/{plan.period}</span>
+                      <p className="text-sm text-gray-600 mt-2 leading-snug">{plan.billingNote}</p>
                     </div>
                     <p className="text-gray-600">{plan.description}</p>
                   </div>
@@ -188,13 +194,16 @@ export default function PricingPage() {
                       </li>
                     ))}
                   </ul>
-                  <button className={`w-full py-3 px-6 rounded-xl font-semibold transition-colors ${
-                    plan.popular 
-                      ? 'bg-primary-500 text-white hover:bg-primary-600' 
-                      : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
-                  }`}>
+                  <Link
+                    href={plan.ctaHref}
+                    className={`flex w-full items-center justify-center py-3 px-6 rounded-xl font-semibold transition-colors ${
+                      plan.popular
+                        ? 'bg-primary-500 text-white hover:bg-primary-600'
+                        : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
+                    }`}
+                  >
                     {plan.cta}
-                  </button>
+                  </Link>
                 </div>
               ))}
             </div>
@@ -231,13 +240,16 @@ export default function PricingPage() {
                       </li>
                     ))}
                   </ul>
-                  <button className={`w-full py-3 px-6 rounded-xl font-semibold transition-colors ${
-                    plan.popular 
-                      ? 'bg-primary-500 text-white hover:bg-primary-600' 
-                      : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
-                  }`}>
+                  <Link
+                    href={plan.ctaHref}
+                    className={`flex w-full items-center justify-center py-3 px-6 rounded-xl font-semibold transition-colors ${
+                      plan.popular
+                        ? 'bg-primary-500 text-white hover:bg-primary-600'
+                        : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
+                    }`}
+                  >
                     {plan.cta}
-                  </button>
+                  </Link>
                 </div>
               ))}
             </div>
@@ -267,9 +279,15 @@ export default function PricingPage() {
               </p>
             </div>
             <div>
-              <h3 className="text-xl font-bold text-gray-900 mb-4">Can I cancel anytime?</h3>
+              <h3 className="text-xl font-bold text-gray-900 mb-4">Are couple plans a monthly subscription?</h3>
               <p className="text-gray-600">
-                Absolutely! You can cancel your subscription at any time with no cancellation fees.
+                No. Couple plans are once-off payments (or free forever on the Free tier). Vendor plans are billed monthly.
+              </p>
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-gray-900 mb-4">Can vendors cancel anytime?</h3>
+              <p className="text-gray-600">
+                Vendor subscriptions can be cancelled any time with no cancellation fees, subject to your billing period.
               </p>
             </div>
           </div>
@@ -282,15 +300,11 @@ export default function PricingPage() {
             Join thousands of happy couples and vendors who trust Ideal Weddings for their wedding planning needs.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link href="/register">
-              <button className="btn-primary btn-lg hover-lift">
-                Start Free Trial
-              </button>
+            <Link href="/register" className="btn-primary btn-lg hover-lift inline-flex justify-center">
+              Start Free Trial
             </Link>
-            <Link href="/contact">
-              <button className="btn-outline btn-lg hover-lift">
-                Contact Sales
-              </button>
+            <Link href="/contact" className="btn-outline btn-lg hover-lift inline-flex justify-center">
+              Contact Sales
             </Link>
           </div>
         </div>

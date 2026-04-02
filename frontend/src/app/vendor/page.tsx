@@ -27,11 +27,21 @@ interface VendorStats {
 
 interface RecentActivity {
   id: string;
-  type: 'booking' | 'quote' | 'review' | 'payment';
+  type: 'booking' | 'quote' | 'review' | 'payment' | 'lead';
   title: string;
   description: string;
   timestamp: string;
   status: 'pending' | 'completed' | 'cancelled';
+}
+
+function formatRelativeTime(iso: string): string {
+  const date = new Date(iso);
+  const now = new Date();
+  const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
+  if (diffInMinutes < 1) return 'Just now';
+  if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
+  if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h ago`;
+  return `${Math.floor(diffInMinutes / 1440)}d ago`;
 }
 
 export default function VendorDashboard() {
@@ -54,6 +64,8 @@ export default function VendorDashboard() {
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreditModal, setShowCreditModal] = useState(false);
+  const [bookingGrowthPct, setBookingGrowthPct] = useState<number | null>(null);
+  const [earningsGrowthPct, setEarningsGrowthPct] = useState<number | null>(null);
 
 
 
@@ -61,57 +73,30 @@ export default function VendorDashboard() {
     const fetchVendorData = async () => {
       setLoading(true);
       try {
-        // Simulate API call
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        // Mock vendor data
-        setStats({
-          totalBookings: 45,
-          pendingBookings: 8,
-          completedBookings: 37,
-          totalEarnings: 12500,
-          monthlyEarnings: 3200,
-          averageRating: 4.8,
-          totalReviews: 23,
-          responseRate: 95,
-        });
-
-        setRecentActivity([
-          {
-            id: '1',
-            type: 'booking',
-            title: 'New Booking Request',
-            description: 'Sarah & John - Wedding Photography - Dec 15, 2024',
-            timestamp: '2 hours ago',
-            status: 'pending',
-          },
-          {
-            id: '2',
-            type: 'review',
-            title: 'New Review Received',
-            description: '5-star review from Emily & Michael',
-            timestamp: '1 day ago',
-            status: 'completed',
-          },
-          {
-            id: '3',
-            type: 'quote',
-            title: 'Quote Request',
-            description: 'Jessica & David - Event Planning - Jan 20, 2025',
-            timestamp: '2 days ago',
-            status: 'pending',
-          },
-          {
-            id: '4',
-            type: 'payment',
-            title: 'Payment Received',
-            description: '$1,200 from Amanda & Robert wedding',
-            timestamp: '3 days ago',
-            status: 'completed',
-          },
-        ]);
+        const res = await fetch('/api/vendor/dashboard-summary', { credentials: 'include' });
+        const json = await res.json();
+        if (!res.ok) {
+          throw new Error(json.error || 'Failed to load dashboard');
+        }
+        setStats(json.data.stats);
+        setRecentActivity(json.data.recentActivity || []);
+        setBookingGrowthPct(json.data.meta?.bookingGrowthPct ?? null);
+        setEarningsGrowthPct(json.data.meta?.earningsGrowthPct ?? null);
       } catch (error) {
         console.error('Failed to fetch vendor data:', error);
+        setStats({
+          totalBookings: 0,
+          pendingBookings: 0,
+          completedBookings: 0,
+          totalEarnings: 0,
+          monthlyEarnings: 0,
+          averageRating: 0,
+          totalReviews: 0,
+          responseRate: 0,
+        });
+        setRecentActivity([]);
+        setBookingGrowthPct(null);
+        setEarningsGrowthPct(null);
       } finally {
         setLoading(false);
       }
@@ -150,10 +135,6 @@ export default function VendorDashboard() {
   const recentLeads = getRecentLeads(3);
 
 
-
-  if (!isVendor) {
-    return null; // Will redirect if not vendor
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-secondary-50">
@@ -276,7 +257,11 @@ export default function VendorDashboard() {
                   </div>
                 </div>
                 <div className="mt-4">
-                  <span className="text-sm text-green-600">+12% from last month</span>
+                  <span className={`text-sm ${bookingGrowthPct != null && bookingGrowthPct >= 0 ? 'text-green-600' : 'text-gray-600'}`}>
+                    {bookingGrowthPct != null && bookingGrowthPct !== 0
+                      ? `${bookingGrowthPct > 0 ? '+' : ''}${bookingGrowthPct}% vs prior month`
+                      : 'Bookings tied to your account'}
+                  </span>
                 </div>
               </div>
 
@@ -306,7 +291,11 @@ export default function VendorDashboard() {
                   </div>
                 </div>
                 <div className="mt-4">
-                  <span className="text-sm text-green-600">+8% from last month</span>
+                  <span className={`text-sm ${earningsGrowthPct != null && earningsGrowthPct >= 0 ? 'text-green-600' : 'text-gray-600'}`}>
+                    {earningsGrowthPct != null && earningsGrowthPct !== 0
+                      ? `${earningsGrowthPct > 0 ? '+' : ''}${earningsGrowthPct}% vs prior month`
+                      : 'Completed payments for your vendor ID'}
+                  </span>
                 </div>
               </div>
 
@@ -321,10 +310,31 @@ export default function VendorDashboard() {
                   </div>
                 </div>
                 <div className="mt-4">
-                  <span className="text-sm text-gray-600">{stats.totalReviews} reviews</span>
+                  <span className="text-sm text-gray-600">
+                    {stats.totalReviews > 0
+                      ? `${stats.totalReviews} public review${stats.totalReviews === 1 ? '' : 's'} on your profile`
+                      : 'Add testimonials on your profile'}
+                  </span>
                 </div>
               </div>
             </div>
+
+            {recentActivity.length > 0 && (
+              <div className="bg-white rounded-2xl p-6 shadow-lg mb-8">
+                <h2 className="text-xl font-bold text-gray-900 mb-4">Recent activity</h2>
+                <ul className="divide-y divide-gray-100">
+                  {recentActivity.slice(0, 8).map((item) => (
+                    <li key={item.id} className="py-3 flex justify-between gap-4 text-sm">
+                      <div>
+                        <span className="font-medium text-gray-900">{item.title}</span>
+                        <p className="text-gray-600">{item.description}</p>
+                      </div>
+                      <span className="text-gray-400 whitespace-nowrap">{formatRelativeTime(item.timestamp)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
               {/* Recent Leads */}

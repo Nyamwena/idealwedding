@@ -2,16 +2,23 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from './useAuth';
+import {
+  loadUserJsonArray,
+  loadUserJsonObject,
+  saveUserJsonArray,
+  saveUserJsonObject,
+  PLANNING_PARTS,
+} from '@/lib/userPlanningStorage';
 
 // User Data Interfaces
 export interface WeddingDetails {
   id: string;
-  weddingDate: string;
-  venue: string;
-  guestCount: number;
-  budget: number;
-  theme: string;
-  location: string;
+  weddingDate?: string;
+  venue?: string;
+  guestCount?: number;
+  budget?: number;
+  theme?: string;
+  location?: string;
   notes?: string;
 }
 
@@ -105,134 +112,37 @@ export function useUserData(): UseUserDataReturn {
   const [guests, setGuests] = useState<Guest[]>([]);
   const [quoteRequests, setQuoteRequests] = useState<QuoteRequest[]>([]);
 
-  // Load user data on mount
+  // Load user data when the signed-in account changes (stable id string for storage keys)
   useEffect(() => {
-    if (user) {
-      loadUserData();
+    if (!user) {
+      setWeddingDetails(null);
+      setBudgetItems([]);
+      setSelectedVendors([]);
+      setGuests([]);
+      setQuoteRequests([]);
+      return;
     }
-  }, [user]);
+    loadUserData();
+  }, [user?.id]);
 
   const loadUserData = async () => {
+    if (!user) return;
+    const uid = String(user.id);
     setIsLoading(true);
     setError(null);
     
     try {
-      // Simulate API calls with mock data
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Mock wedding details
-      setWeddingDetails({
-        id: '1',
-        weddingDate: '2024-06-15',
-        venue: 'Garden Venue',
-        guestCount: 150,
-        budget: 25000,
-        theme: 'Rustic Garden',
-        location: 'Napa Valley, CA',
-        notes: 'Outdoor ceremony with garden reception'
-      });
-      
-      // Mock budget items
-      setBudgetItems([
-        {
-          id: '1',
-          category: 'Venue',
-          allocated: 8000,
-          spent: 8000,
-          vendor: 'Garden Venue',
-          status: 'paid'
-        },
-        {
-          id: '2',
-          category: 'Photography',
-          allocated: 3000,
-          spent: 1500,
-          vendor: 'Elite Photography',
-          status: 'booked'
-        },
-        {
-          id: '3',
-          category: 'Catering',
-          allocated: 6000,
-          spent: 0,
-          status: 'planned'
-        },
-        {
-          id: '4',
-          category: 'Flowers',
-          allocated: 2000,
-          spent: 0,
-          status: 'planned'
-        }
-      ]);
-      
-      // Mock selected vendors
-      setSelectedVendors([
-        {
-          id: '1',
-          name: 'Garden Venue',
-          category: 'Venue',
-          contact: 'contact@gardenvenue.com',
-          price: 8000,
-          status: 'paid',
-          notes: 'Includes ceremony and reception space'
-        },
-        {
-          id: '2',
-          name: 'Elite Photography',
-          category: 'Photography',
-          contact: 'info@elitephoto.com',
-          price: 3000,
-          status: 'booked',
-          notes: '8-hour coverage with 2 photographers'
-        }
-      ]);
-      
-      // Mock guests
-      setGuests([
-        {
-          id: '1',
-          name: 'John Smith',
-          email: 'john@example.com',
-          relationship: 'Groom\'s Father',
-          rsvpStatus: 'attending',
-          dietaryNeeds: 'Vegetarian',
-          plusOne: false
-        },
-        {
-          id: '2',
-          name: 'Sarah Johnson',
-          email: 'sarah@example.com',
-          relationship: 'Bride\'s Sister',
-          rsvpStatus: 'attending',
-          dietaryNeeds: 'Gluten-free',
-          plusOne: true,
-          plusOneName: 'Mike Johnson'
-        },
-        {
-          id: '3',
-          name: 'David Wilson',
-          email: 'david@example.com',
-          relationship: 'Friend',
-          rsvpStatus: 'pending',
-          plusOne: false
-        }
-      ]);
-      
-      // Mock quote requests
-      setQuoteRequests([
-        {
-          id: '1',
-          category: 'Catering',
-          description: 'Buffet style dinner for 150 guests',
-          budget: 6000,
-          location: 'Napa Valley, CA',
-          date: '2024-06-15',
-          status: 'pending',
-          vendors: ['vendor1', 'vendor2'],
-          createdAt: '2024-01-15T10:00:00Z'
-        }
-      ]);
+      const wd = loadUserJsonObject<WeddingDetails>(uid, PLANNING_PARTS.weddingDetails);
+      if (wd && typeof wd.id === 'string') {
+        setWeddingDetails(wd);
+      } else {
+        setWeddingDetails(null);
+      }
+
+      setBudgetItems(loadUserJsonArray<BudgetItem>(uid, PLANNING_PARTS.budgetItems));
+      setSelectedVendors(loadUserJsonArray<SelectedVendor>(uid, PLANNING_PARTS.selectedVendors));
+      setGuests(loadUserJsonArray<Guest>(uid, PLANNING_PARTS.guests));
+      setQuoteRequests(loadUserJsonArray<QuoteRequest>(uid, PLANNING_PARTS.quoteRequestsLegacy));
       
     } catch (err) {
       setError('Failed to load user data');
@@ -244,10 +154,19 @@ export function useUserData(): UseUserDataReturn {
 
   // Wedding Details Functions
   const updateWeddingDetails = async (details: Partial<WeddingDetails>) => {
+    if (!user) return;
     setIsLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      setWeddingDetails(prev => prev ? { ...prev, ...details } : null);
+      await new Promise(resolve => setTimeout(resolve, 300));
+      setWeddingDetails(prev => {
+        const next: WeddingDetails = {
+          id: prev?.id || `wd_${Date.now()}`,
+          ...prev,
+          ...details,
+        };
+        saveUserJsonObject(String(user.id), PLANNING_PARTS.weddingDetails, next);
+        return next;
+      });
     } catch (err) {
       setError('Failed to update wedding details');
     } finally {
@@ -257,14 +176,19 @@ export function useUserData(): UseUserDataReturn {
 
   // Budget Functions
   const addBudgetItem = async (item: Omit<BudgetItem, 'id'>) => {
+    if (!user) return;
     setIsLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 300));
       const newItem: BudgetItem = {
         ...item,
         id: Date.now().toString()
       };
-      setBudgetItems(prev => [...prev, newItem]);
+      setBudgetItems(prev => {
+        const next = [...prev, newItem];
+        saveUserJsonArray(String(user.id), PLANNING_PARTS.budgetItems, next);
+        return next;
+      });
     } catch (err) {
       setError('Failed to add budget item');
     } finally {
@@ -273,12 +197,17 @@ export function useUserData(): UseUserDataReturn {
   };
 
   const updateBudgetItem = async (id: string, item: Partial<BudgetItem>) => {
+    if (!user) return;
     setIsLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      setBudgetItems(prev => prev.map(budgetItem => 
-        budgetItem.id === id ? { ...budgetItem, ...item } : budgetItem
-      ));
+      await new Promise(resolve => setTimeout(resolve, 300));
+      setBudgetItems(prev => {
+        const next = prev.map(budgetItem =>
+          budgetItem.id === id ? { ...budgetItem, ...item } : budgetItem
+        );
+        saveUserJsonArray(String(user.id), PLANNING_PARTS.budgetItems, next);
+        return next;
+      });
     } catch (err) {
       setError('Failed to update budget item');
     } finally {
@@ -287,10 +216,15 @@ export function useUserData(): UseUserDataReturn {
   };
 
   const deleteBudgetItem = async (id: string) => {
+    if (!user) return;
     setIsLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      setBudgetItems(prev => prev.filter(item => item.id !== id));
+      await new Promise(resolve => setTimeout(resolve, 300));
+      setBudgetItems(prev => {
+        const next = prev.filter(bi => bi.id !== id);
+        saveUserJsonArray(String(user.id), PLANNING_PARTS.budgetItems, next);
+        return next;
+      });
     } catch (err) {
       setError('Failed to delete budget item');
     } finally {
@@ -300,14 +234,19 @@ export function useUserData(): UseUserDataReturn {
 
   // Vendor Functions
   const addSelectedVendor = async (vendor: Omit<SelectedVendor, 'id'>) => {
+    if (!user) return;
     setIsLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 300));
       const newVendor: SelectedVendor = {
         ...vendor,
         id: Date.now().toString()
       };
-      setSelectedVendors(prev => [...prev, newVendor]);
+      setSelectedVendors(prev => {
+        const next = [...prev, newVendor];
+        saveUserJsonArray(String(user.id), PLANNING_PARTS.selectedVendors, next);
+        return next;
+      });
     } catch (err) {
       setError('Failed to add vendor');
     } finally {
@@ -316,12 +255,15 @@ export function useUserData(): UseUserDataReturn {
   };
 
   const updateSelectedVendor = async (id: string, vendor: Partial<SelectedVendor>) => {
+    if (!user) return;
     setIsLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      setSelectedVendors(prev => prev.map(v => 
-        v.id === id ? { ...v, ...vendor } : v
-      ));
+      await new Promise(resolve => setTimeout(resolve, 300));
+      setSelectedVendors(prev => {
+        const next = prev.map(v => (v.id === id ? { ...v, ...vendor } : v));
+        saveUserJsonArray(String(user.id), PLANNING_PARTS.selectedVendors, next);
+        return next;
+      });
     } catch (err) {
       setError('Failed to update vendor');
     } finally {
@@ -330,10 +272,15 @@ export function useUserData(): UseUserDataReturn {
   };
 
   const removeSelectedVendor = async (id: string) => {
+    if (!user) return;
     setIsLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      setSelectedVendors(prev => prev.filter(v => v.id !== id));
+      await new Promise(resolve => setTimeout(resolve, 300));
+      setSelectedVendors(prev => {
+        const next = prev.filter(v => v.id !== id);
+        saveUserJsonArray(String(user.id), PLANNING_PARTS.selectedVendors, next);
+        return next;
+      });
     } catch (err) {
       setError('Failed to remove vendor');
     } finally {
@@ -343,14 +290,19 @@ export function useUserData(): UseUserDataReturn {
 
   // Guest Functions
   const addGuest = async (guest: Omit<Guest, 'id'>) => {
+    if (!user) return;
     setIsLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 300));
       const newGuest: Guest = {
         ...guest,
         id: Date.now().toString()
       };
-      setGuests(prev => [...prev, newGuest]);
+      setGuests(prev => {
+        const next = [...prev, newGuest];
+        saveUserJsonArray(String(user.id), PLANNING_PARTS.guests, next);
+        return next;
+      });
     } catch (err) {
       setError('Failed to add guest');
     } finally {
@@ -359,12 +311,15 @@ export function useUserData(): UseUserDataReturn {
   };
 
   const updateGuest = async (id: string, guest: Partial<Guest>) => {
+    if (!user) return;
     setIsLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      setGuests(prev => prev.map(g => 
-        g.id === id ? { ...g, ...guest } : g
-      ));
+      await new Promise(resolve => setTimeout(resolve, 300));
+      setGuests(prev => {
+        const next = prev.map(g => (g.id === id ? { ...g, ...guest } : g));
+        saveUserJsonArray(String(user.id), PLANNING_PARTS.guests, next);
+        return next;
+      });
     } catch (err) {
       setError('Failed to update guest');
     } finally {
@@ -373,10 +328,15 @@ export function useUserData(): UseUserDataReturn {
   };
 
   const deleteGuest = async (id: string) => {
+    if (!user) return;
     setIsLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      setGuests(prev => prev.filter(g => g.id !== id));
+      await new Promise(resolve => setTimeout(resolve, 300));
+      setGuests(prev => {
+        const next = prev.filter(g => g.id !== id);
+        saveUserJsonArray(String(user.id), PLANNING_PARTS.guests, next);
+        return next;
+      });
     } catch (err) {
       setError('Failed to delete guest');
     } finally {
@@ -385,12 +345,15 @@ export function useUserData(): UseUserDataReturn {
   };
 
   const updateRSVP = async (id: string, status: Guest['rsvpStatus']) => {
+    if (!user) return;
     setIsLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      setGuests(prev => prev.map(g => 
-        g.id === id ? { ...g, rsvpStatus: status } : g
-      ));
+      await new Promise(resolve => setTimeout(resolve, 300));
+      setGuests(prev => {
+        const next = prev.map(g => (g.id === id ? { ...g, rsvpStatus: status } : g));
+        saveUserJsonArray(String(user.id), PLANNING_PARTS.guests, next);
+        return next;
+      });
     } catch (err) {
       setError('Failed to update RSVP');
     } finally {
@@ -400,15 +363,20 @@ export function useUserData(): UseUserDataReturn {
 
   // Quote Request Functions
   const createQuoteRequest = async (request: Omit<QuoteRequest, 'id' | 'createdAt'>) => {
+    if (!user) return;
     setIsLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 300));
       const newRequest: QuoteRequest = {
         ...request,
         id: Date.now().toString(),
         createdAt: new Date().toISOString()
       };
-      setQuoteRequests(prev => [...prev, newRequest]);
+      setQuoteRequests(prev => {
+        const next = [...prev, newRequest];
+        saveUserJsonArray(String(user.id), PLANNING_PARTS.quoteRequestsLegacy, next);
+        return next;
+      });
     } catch (err) {
       setError('Failed to create quote request');
     } finally {
@@ -417,12 +385,15 @@ export function useUserData(): UseUserDataReturn {
   };
 
   const updateQuoteRequest = async (id: string, request: Partial<QuoteRequest>) => {
+    if (!user) return;
     setIsLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      setQuoteRequests(prev => prev.map(r => 
-        r.id === id ? { ...r, ...request } : r
-      ));
+      await new Promise(resolve => setTimeout(resolve, 300));
+      setQuoteRequests(prev => {
+        const next = prev.map(r => (r.id === id ? { ...r, ...request } : r));
+        saveUserJsonArray(String(user.id), PLANNING_PARTS.quoteRequestsLegacy, next);
+        return next;
+      });
     } catch (err) {
       setError('Failed to update quote request');
     } finally {

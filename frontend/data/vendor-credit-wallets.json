@@ -1,0 +1,12 @@
+[
+  {
+    "key": "vendor_1",
+    "vendorId": "vendor_1",
+    "vendorUserId": "1",
+    "currentCredits": 250,
+    "totalPurchased": 250,
+    "totalUsed": 0,
+    "lastTopUp": "2024-09-01T12:00:00.000Z",
+    "updatedAt": "2024-09-01T12:00:00.000Z"
+  }
+]

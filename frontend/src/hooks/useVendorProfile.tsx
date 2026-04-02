@@ -105,7 +105,7 @@ export function useVendorProfile() {
   const fetchProfile = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/vendor/profile');
+      const response = await fetch('/api/vendor/profile', { credentials: 'include' });
       const result = await response.json();
       
       if (!response.ok) {
@@ -128,6 +128,7 @@ export function useVendorProfile() {
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
         body: JSON.stringify(updates),
       });
 
@@ -169,6 +170,7 @@ export function useVendorProfile() {
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
         body: JSON.stringify({
           services: updatedProfile?.services,
           lastUpdated: updatedProfile?.lastUpdated,
@@ -209,6 +211,7 @@ export function useVendorProfile() {
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
         body: JSON.stringify({
           services: updatedProfile?.services,
           lastUpdated: updatedProfile?.lastUpdated,
@@ -247,6 +250,7 @@ export function useVendorProfile() {
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
         body: JSON.stringify({
           services: updatedProfile?.services,
           lastUpdated: updatedProfile?.lastUpdated,
@@ -290,6 +294,7 @@ export function useVendorProfile() {
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
         body: JSON.stringify({
           portfolio: updatedProfile?.portfolio,
           lastUpdated: updatedProfile?.lastUpdated,

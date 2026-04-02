@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readDataFile, writeDataFile } from '@/lib/dataFileStore';
+import { getAuthenticatedUserFromRequest } from '@/lib/auth';
 
 // Helper to read bookings from file
 const getBookings = () => {
@@ -14,6 +15,11 @@ const saveBookings = (bookings: any[]) => {
 // POST /api/user/bookings/create - Create a new booking
 export async function POST(request: NextRequest) {
   try {
+    const user = await getAuthenticatedUserFromRequest(request);
+    if (!user) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await request.json();
     const {
       vendorId,
@@ -35,7 +41,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const userId = 'customer_001'; // Mock user ID - in real app, get from auth
+    const customerId = String(user.id);
+    const displayName = [user.firstName, user.lastName].filter(Boolean).join(' ').trim();
+    const resolvedName = customerName?.trim() || displayName || user.email.split('@')[0] || 'Couple';
+    const resolvedEmail = (customerEmail?.trim() || user.email).toLowerCase();
 
     const vendorUserIdMatch = typeof vendorId === 'string' ? vendorId.match(/^vendor_(.+)$/) : null;
     const vendorUserId = vendorUserIdMatch ? vendorUserIdMatch[1] : undefined;
@@ -45,9 +54,9 @@ export async function POST(request: NextRequest) {
       id: `booking_${Date.now()}`,
       vendorId,
       vendorUserId,
-      customerId: userId,
-      customerName: customerName || 'Sarah & John',
-      customerEmail: customerEmail || 'sarah.john@email.com',
+      customerId,
+      customerName: resolvedName,
+      customerEmail: resolvedEmail,
       serviceCategory,
       serviceName,
       weddingDate,

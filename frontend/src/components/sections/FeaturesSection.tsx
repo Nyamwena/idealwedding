@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 
 export function FeaturesSection() {
   const features = [
@@ -27,12 +28,6 @@ export function FeaturesSection() {
       description: 'Create and manage your wedding timeline with automated reminders.',
       icon: '📅',
       color: 'from-purple-500 to-violet-500',
-    },
-    {
-      title: 'Photo Sharing',
-      description: 'Share and organize wedding photos with family and friends.',
-      icon: '📸',
-      color: 'from-orange-500 to-red-500',
     },
     {
       title: 'Wedding Website',
@@ -71,10 +66,15 @@ export function FeaturesSection() {
               <p className="text-gray-600 leading-relaxed text-lg">
                 {feature.description}
               </p>
-              <div className="mt-6 flex items-center text-primary-600 font-semibold group-hover:translate-x-2 transition-transform duration-300">
+              <Link
+                href="/features"
+                className="mt-6 inline-flex items-center text-primary-600 font-semibold group-hover:translate-x-2 transition-transform duration-300 hover:text-primary-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 rounded"
+              >
                 Learn more
-                <span className="ml-2 text-xl">→</span>
-              </div>
+                <span className="ml-2 text-xl" aria-hidden>
+                  →
+                </span>
+              </Link>
             </div>
           ))}
         </div>

@@ -24,18 +24,20 @@ export function CTASection() {
           Start your journey today and make your dream wedding a reality.
         </p>
         
-        <div className="flex flex-col sm:flex-row gap-6 justify-center items-center mb-16">
-          <Link href="/register">
-            <button className="bg-white text-primary-600 hover:bg-gray-100 font-bold py-4 px-8 rounded-2xl transition-all duration-300 hover-lift shadow-lg hover:shadow-xl text-lg">
-              Get Started Free
-              <span className="ml-2 text-xl">💒</span>
-            </button>
+        <div className="relative z-10 flex flex-col sm:flex-row gap-6 justify-center items-center mb-16">
+          <Link
+            href="/register"
+            className="inline-flex items-center justify-center bg-white text-primary-600 hover:bg-gray-100 font-bold py-4 px-8 rounded-2xl transition-all duration-300 hover-lift shadow-lg hover:shadow-xl text-lg"
+          >
+            Get Started Free
+            <span className="ml-2 text-xl">💒</span>
           </Link>
-          <Link href="/login">
-            <button className="border-2 border-white text-white hover:bg-white hover:text-primary-600 font-bold py-4 px-8 rounded-2xl transition-all duration-300 hover-lift text-lg">
-              Sign In
-              <span className="ml-2">→</span>
-            </button>
+          <Link
+            href="/login"
+            className="inline-flex items-center justify-center border-2 border-white text-white hover:bg-white hover:text-primary-600 font-bold py-4 px-8 rounded-2xl transition-all duration-300 hover-lift text-lg"
+          >
+            Sign In
+            <span className="ml-2">→</span>
           </Link>
         </div>
 

@@ -126,15 +126,11 @@ export default function AboutPage() {
             Join thousands of happy couples who have created their dream weddings with Ideal Weddings.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link href="/register">
-              <button className="btn-primary btn-lg hover-lift">
-                Get Started Today
-              </button>
+            <Link href="/register" className="btn-primary btn-lg hover-lift inline-flex justify-center">
+              Get Started Today
             </Link>
-            <Link href="/contact">
-              <button className="btn-outline btn-lg hover-lift">
-                Contact Us
-              </button>
+            <Link href="/contact" className="btn-outline btn-lg hover-lift inline-flex justify-center">
+              Contact Us
             </Link>
           </div>
         </div>

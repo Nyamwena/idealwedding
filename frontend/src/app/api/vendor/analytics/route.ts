@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import jwt from 'jsonwebtoken';
 import { readDataFile } from '@/lib/dataFileStore';
+import { getVendorSession } from '@/lib/vendorSession';
+import { leadBelongsToVendor } from '@/lib/vendorLeadScope';
+import { findVendorProfile } from '@/lib/vendorProfileScope';
 
 // Helper to read vendor leads from file
 const getVendorLeads = () => {
@@ -24,34 +26,13 @@ const getPayments = () => {
 
 export const dynamic = "force-dynamic";
 
-function getToken(request: NextRequest): string | null {
-  const header = request.headers.get('authorization');
-  if (header?.startsWith('Bearer ')) return header.slice(7);
-  return request.cookies.get('token')?.value || null;
-}
-
-function getVendorUserId(request: NextRequest): string | null {
-  const token = getToken(request);
-  if (!token || !process.env.JWT_SECRET) return null;
-  try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET) as {
-      userId?: string | number;
-      role?: string;
-    };
-    const role = String(payload.role || '').toUpperCase();
-    if (!payload.userId || role !== 'VENDOR') return null;
-    return String(payload.userId);
-  } catch {
-    return null;
-  }
-}
-
 // GET /api/vendor/analytics - Get vendor analytics data
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const period = searchParams.get('period') || '30d';
-    const vendorUserId = getVendorUserId(request);
+    const session = await getVendorSession(request);
+    const vendorUserId = session?.userId;
     if (!vendorUserId) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized vendor access' },
@@ -59,7 +40,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const vendorId = `vendor_${vendorUserId}`;
+    const vendorId = session!.vendorId;
 
     // Get all data
     const [allLeads, allBookings, allPayments, vendorProfiles] = await Promise.all([
@@ -70,13 +51,19 @@ export async function GET(request: NextRequest) {
     ]);
 
     // Filter data for this vendor
-    const vendorLeads = allLeads.filter(
-      (lead: any) =>
-        String(lead.vendorUserId || '') === vendorUserId ||
-        String(lead.vendorId || '') === vendorId
+    const vendorLeads = allLeads.filter((lead: any) =>
+      leadBelongsToVendor(lead, session!),
     );
-    const vendorBookings = allBookings.filter((booking: any) => booking.vendorId === vendorId);
-    const vendorPayments = allPayments.filter((payment: any) => payment.vendorId === vendorId);
+    const vendorBookings = allBookings.filter(
+      (booking: any) =>
+        String(booking.vendorUserId || '') === vendorUserId ||
+        String(booking.vendorId || '') === vendorId,
+    );
+    const vendorPayments = allPayments.filter(
+      (payment: any) =>
+        String(payment.vendorUserId || '') === vendorUserId ||
+        String(payment.vendorId || '') === vendorId,
+    );
 
     // Calculate date range based on period
     const now = new Date();
@@ -155,9 +142,7 @@ export async function GET(request: NextRequest) {
     const revenueGrowth = previousRevenue > 0 ? ((totalRevenue - previousRevenue) / previousRevenue) * 100 : 0;
 
     // Calculate category performance
-    const vendorProfile = vendorProfiles.find(
-      (p: any) => String(p.userId || '') === vendorUserId || p.id === vendorId
-    );
+    const vendorProfile = findVendorProfile(vendorProfiles, session!);
     const categoryPerformance = vendorProfile?.services?.map((service: any) => {
       const serviceLeads = filteredLeads.filter((lead: any) => 
         lead.serviceCategory === service.category

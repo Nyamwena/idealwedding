@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { Logo } from '../ui/Logo';
 import { useAuth } from '@/hooks/useAuth';
@@ -8,12 +9,17 @@ import { useAuth } from '@/hooks/useAuth';
 export function Header() {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isAdminDropdownOpen, setIsAdminDropdownOpen] = useState(false);
+    const [menuMounted, setMenuMounted] = useState(false);
     const { user, loading, logout } = useAuth();
 
     const isAuthenticated = !!user;
     const isAdmin = user?.role === 'ADMIN';
     const isVendor = user?.role === 'VENDOR';
     const adminDropdownRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        setMenuMounted(true);
+    }, []);
 
     // Close admin dropdown when clicking outside
     useEffect(() => {
@@ -29,6 +35,15 @@ export function Header() {
         };
     }, []);
 
+    useEffect(() => {
+        if (!isMenuOpen) return;
+        const prev = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        return () => {
+            document.body.style.overflow = prev;
+        };
+    }, [isMenuOpen]);
+
     return (
         <header className="glass sticky top-0 z-50">
             <nav className="container-modern flex items-center justify-between py-4" aria-label="Global">
@@ -37,14 +52,31 @@ export function Header() {
                 </div>
 
                 <div className="flex lg:hidden">
-                    <button
-                        type="button"
-                        className="-m-2.5 inline-flex items-center justify-center rounded-xl p-2.5 text-gray-700 hover:bg-gray-100 transition-colors"
-                        onClick={() => setIsMenuOpen(true)}
-                    >
-                        <span className="sr-only">Open main menu</span>
-                        <span className="h-6 w-6 text-2xl">☰</span>
-                    </button>
+                    {!isMenuOpen ? (
+                        <button
+                            type="button"
+                            className="-m-2.5 inline-flex items-center justify-center rounded-xl p-2.5 text-gray-700 hover:bg-gray-100 transition-colors"
+                            onClick={() => setIsMenuOpen(true)}
+                            aria-expanded={false}
+                        >
+                            <span className="sr-only">Open main menu</span>
+                            <span className="h-6 w-6 text-2xl" aria-hidden>
+                                ☰
+                            </span>
+                        </button>
+                    ) : (
+                        <button
+                            type="button"
+                            className="-m-2.5 inline-flex items-center justify-center rounded-xl p-2.5 text-gray-700 hover:bg-gray-100 transition-colors"
+                            onClick={() => setIsMenuOpen(false)}
+                            aria-expanded={true}
+                        >
+                            <span className="sr-only">Close main menu</span>
+                            <span className="h-6 w-6 text-2xl" aria-hidden>
+                                ✕
+                            </span>
+                        </button>
+                    )}
                 </div>
 
                 <div className="hidden lg:flex lg:gap-x-8">
@@ -179,7 +211,12 @@ export function Header() {
                             <Link href="/about" className="nav-link text-sm font-semibold leading-6">
                                 About
                             </Link>
-                            <Link href="/blog" className="nav-link text-sm font-semibold leading-6">
+                            <Link
+                                href="https://idealweddings.co.zw"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="nav-link text-sm font-semibold leading-6"
+                            >
                                 Blog
                             </Link>
                             <Link href="/features" className="nav-link text-sm font-semibold leading-6">
@@ -216,174 +253,195 @@ export function Header() {
                         </div>
                     ) : (
                         <>
-                            <Link href="/login">
-                                <button className="btn-ghost btn-md hover-lift">
-                                    Sign in
-                                </button>
+                            <Link href="/login" className="btn-ghost btn-md hover-lift">
+                                Sign in
                             </Link>
-                            <Link href="/register">
-                                <button className="btn-primary btn-md hover-lift">
-                                    Get Started
-                                </button>
+                            <Link href="/register" className="btn-primary btn-md hover-lift">
+                                Get Started
                             </Link>
                         </>
                     )}
                 </div>
             </nav>
 
-            {/* Mobile menu */}
-            {isMenuOpen && (
-                <div className="lg:hidden">
-                    <div className="fixed inset-0 z-50 bg-black/20 backdrop-blur-sm" />
-                    <div className="fixed inset-y-0 right-0 z-50 w-full overflow-y-auto bg-white/95 backdrop-blur-md px-6 py-6 sm:max-w-sm sm:ring-1 sm:ring-gray-900/10">
-                        <div className="flex items-center justify-between">
-                            <Logo size="md" className="flex-shrink-0" />
-                            <button
-                                type="button"
-                                className="-m-2.5 rounded-xl p-2.5 text-gray-700 hover:bg-gray-100 transition-colors"
-                                onClick={() => setIsMenuOpen(false)}
-                            >
-                                <span className="sr-only">Close menu</span>
-                                <span className="h-6 w-6 text-2xl">✕</span>
-                            </button>
-                        </div>
-                        <div className="mt-8 flow-root">
-                            <div className="-my-6 divide-y divide-gray-200">
-                                <div className="space-y-4 py-6">
-                                    {isAuthenticated ? (
-                                        <>
-                                            <Link
-                                                href={isVendor ? "/vendor" : isAdmin ? "/admin" : "/dashboard"}
-                                                className="-mx-3 block rounded-xl px-3 py-3 text-base font-semibold leading-7 text-gray-900 hover:bg-gray-50 transition-colors"
-                                                onClick={() => setIsMenuOpen(false)}
-                                            >
-                                                Dashboard
-                                            </Link>
-                                            {isAdmin && (
-                                                <>
-                                                    <div className="px-3 py-2">
-                                                        <div className="text-sm font-semibold text-purple-600 mb-2">Admin Panel</div>
-                                                        <div className="space-y-2 ml-4">
-                                                            <Link
-                                                                href="/admin"
-                                                                className="block text-sm text-gray-600 hover:text-gray-900 transition-colors"
-                                                                onClick={() => setIsMenuOpen(false)}
-                                                            >
-                                                                🏠 Admin Dashboard
-                                                            </Link>
-                                                            <Link
-                                                                href="/admin/vendors"
-                                                                className="block text-sm text-gray-600 hover:text-gray-900 transition-colors"
-                                                                onClick={() => setIsMenuOpen(false)}
-                                                            >
-                                                                🏢 Vendor Management
-                                                            </Link>
-                                                            <Link
-                                                                href="/admin/ads"
-                                                                className="block text-sm text-gray-600 hover:text-gray-900 transition-colors"
-                                                                onClick={() => setIsMenuOpen(false)}
-                                                            >
-                                                                📢 Advertisement Management
-                                                            </Link>
-                                                            <Link
-                                                                href="/admin/monitoring"
-                                                                className="block text-sm text-gray-600 hover:text-gray-900 transition-colors"
-                                                                onClick={() => setIsMenuOpen(false)}
-                                                            >
-                                                                📊 System Monitoring
-                                                            </Link>
-                                                            <Link
-                                                                href="/admin/advanced-reports"
-                                                                className="block text-sm text-gray-600 hover:text-gray-900 transition-colors"
-                                                                onClick={() => setIsMenuOpen(false)}
-                                                            >
-                                                                📈 Advanced Reports
-                                                            </Link>
-                                                            <Link
-                                                                href="/admin/users"
-                                                                className="block text-sm text-gray-600 hover:text-gray-900 transition-colors"
-                                                                onClick={() => setIsMenuOpen(false)}
-                                                            >
-                                                                👥 User Management
-                                                            </Link>
-                                                            <Link
-                                                                href="/admin/settings"
-                                                                className="block text-sm text-gray-600 hover:text-gray-900 transition-colors"
-                                                                onClick={() => setIsMenuOpen(false)}
-                                                            >
-                                                                ⚙️ System Settings
-                                                            </Link>
+            {/* Mobile menu: portaled to body so backdrop-blur on header cannot clip fixed panel */}
+            {menuMounted &&
+                isMenuOpen &&
+                createPortal(
+                    <div className="lg:hidden" role="dialog" aria-modal="true" aria-label="Main menu">
+                        <button
+                            type="button"
+                            className="fixed inset-0 z-[100] bg-black/30 backdrop-blur-sm"
+                            aria-label="Close menu"
+                            onClick={() => setIsMenuOpen(false)}
+                        />
+                        <div className="fixed inset-y-0 right-0 z-[101] flex w-full max-w-full flex-col overflow-y-auto bg-white px-6 py-6 shadow-xl sm:max-w-sm sm:ring-1 sm:ring-gray-900/10">
+                            <div className="flex shrink-0 items-center justify-between">
+                                <Logo size="md" className="flex-shrink-0" />
+                                <button
+                                    type="button"
+                                    className="-m-2.5 rounded-xl p-2.5 text-gray-700 hover:bg-gray-100 transition-colors"
+                                    onClick={() => setIsMenuOpen(false)}
+                                >
+                                    <span className="sr-only">Close menu</span>
+                                    <span className="h-6 w-6 text-2xl" aria-hidden>
+                                        ✕
+                                    </span>
+                                </button>
+                            </div>
+                            <div className="mt-8 flex-1">
+                                <div className="-my-6 divide-y divide-gray-200">
+                                    <div className="space-y-4 py-6">
+                                        {isAuthenticated ? (
+                                            <>
+                                                <Link
+                                                    href={isVendor ? '/vendor' : isAdmin ? '/admin' : '/dashboard'}
+                                                    className="-mx-3 block rounded-xl px-3 py-3 text-base font-semibold leading-7 text-gray-900 hover:bg-gray-50 transition-colors"
+                                                    onClick={() => setIsMenuOpen(false)}
+                                                >
+                                                    Dashboard
+                                                </Link>
+                                                {isAdmin && (
+                                                    <>
+                                                        <div className="px-3 py-2">
+                                                            <div className="text-sm font-semibold text-purple-600 mb-2">
+                                                                Admin Panel
+                                                            </div>
+                                                            <div className="space-y-2 ml-4">
+                                                                <Link
+                                                                    href="/admin"
+                                                                    className="block text-sm text-gray-600 hover:text-gray-900 transition-colors"
+                                                                    onClick={() => setIsMenuOpen(false)}
+                                                                >
+                                                                    🏠 Admin Dashboard
+                                                                </Link>
+                                                                <Link
+                                                                    href="/admin/vendors"
+                                                                    className="block text-sm text-gray-600 hover:text-gray-900 transition-colors"
+                                                                    onClick={() => setIsMenuOpen(false)}
+                                                                >
+                                                                    🏢 Vendor Management
+                                                                </Link>
+                                                                <Link
+                                                                    href="/admin/ads"
+                                                                    className="block text-sm text-gray-600 hover:text-gray-900 transition-colors"
+                                                                    onClick={() => setIsMenuOpen(false)}
+                                                                >
+                                                                    📢 Advertisement Management
+                                                                </Link>
+                                                                <Link
+                                                                    href="/admin/monitoring"
+                                                                    className="block text-sm text-gray-600 hover:text-gray-900 transition-colors"
+                                                                    onClick={() => setIsMenuOpen(false)}
+                                                                >
+                                                                    📊 System Monitoring
+                                                                </Link>
+                                                                <Link
+                                                                    href="/admin/advanced-reports"
+                                                                    className="block text-sm text-gray-600 hover:text-gray-900 transition-colors"
+                                                                    onClick={() => setIsMenuOpen(false)}
+                                                                >
+                                                                    📈 Advanced Reports
+                                                                </Link>
+                                                                <Link
+                                                                    href="/admin/users"
+                                                                    className="block text-sm text-gray-600 hover:text-gray-900 transition-colors"
+                                                                    onClick={() => setIsMenuOpen(false)}
+                                                                >
+                                                                    👥 User Management
+                                                                </Link>
+                                                                <Link
+                                                                    href="/admin/settings"
+                                                                    className="block text-sm text-gray-600 hover:text-gray-900 transition-colors"
+                                                                    onClick={() => setIsMenuOpen(false)}
+                                                                >
+                                                                    ⚙️ System Settings
+                                                                </Link>
+                                                            </div>
                                                         </div>
-                                                    </div>
-                                                </>
-                                            )}
-                                        </>
-                                    ) : (
-                                        <>
+                                                    </>
+                                                )}
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Link
+                                                    href="/about"
+                                                    className="-mx-3 block rounded-xl px-3 py-3 text-base font-semibold leading-7 text-gray-900 hover:bg-gray-50 transition-colors"
+                                                    onClick={() => setIsMenuOpen(false)}
+                                                >
+                                                    About
+                                                </Link>
+                                                <Link
+                                                    href="https://idealweddings.co.zw"
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="-mx-3 block rounded-xl px-3 py-3 text-base font-semibold leading-7 text-gray-900 hover:bg-gray-50 transition-colors"
+                                                    onClick={() => setIsMenuOpen(false)}
+                                                >
+                                                    Blog
+                                                </Link>
+                                                <Link
+                                                    href="/features"
+                                                    className="-mx-3 block rounded-xl px-3 py-3 text-base font-semibold leading-7 text-gray-900 hover:bg-gray-50 transition-colors"
+                                                    onClick={() => setIsMenuOpen(false)}
+                                                >
+                                                    Features
+                                                </Link>
+                                                <Link
+                                                    href="/vendors"
+                                                    className="-mx-3 block rounded-xl px-3 py-3 text-base font-semibold leading-7 text-gray-900 hover:bg-gray-50 transition-colors"
+                                                    onClick={() => setIsMenuOpen(false)}
+                                                >
+                                                    Vendors
+                                                </Link>
+                                                <Link
+                                                    href="/vendor"
+                                                    className="-mx-3 block rounded-xl px-3 py-3 text-base font-semibold leading-7 text-orange-600 hover:bg-orange-50 transition-colors"
+                                                    onClick={() => setIsMenuOpen(false)}
+                                                >
+                                                    🏪 Vendor Account
+                                                </Link>
+                                                <Link
+                                                    href="/pricing"
+                                                    className="-mx-3 block rounded-xl px-3 py-3 text-base font-semibold leading-7 text-gray-900 hover:bg-gray-50 transition-colors"
+                                                    onClick={() => setIsMenuOpen(false)}
+                                                >
+                                                    Pricing
+                                                </Link>
+                                                <Link
+                                                    href="/contact"
+                                                    className="-mx-3 block rounded-xl px-3 py-3 text-base font-semibold leading-7 text-gray-900 hover:bg-gray-50 transition-colors"
+                                                    onClick={() => setIsMenuOpen(false)}
+                                                >
+                                                    Contact
+                                                </Link>
+                                            </>
+                                        )}
+                                    </div>
+                                    <div className="py-6">
+                                        <div className="space-y-4">
                                             <Link
-                                                href="/about"
-                                                className="-mx-3 block rounded-xl px-3 py-3 text-base font-semibold leading-7 text-gray-900 hover:bg-gray-50 transition-colors"
+                                                href="/login"
                                                 onClick={() => setIsMenuOpen(false)}
+                                                className="-mx-3 block w-full rounded-xl px-3 py-3 text-left text-base font-semibold leading-7 text-gray-900 transition-colors hover:bg-gray-50"
                                             >
-                                                About
-                                            </Link>
-                                            <Link
-                                                href="/features"
-                                                className="-mx-3 block rounded-xl px-3 py-3 text-base font-semibold leading-7 text-gray-900 hover:bg-gray-50 transition-colors"
-                                                onClick={() => setIsMenuOpen(false)}
-                                            >
-                                                Features
-                                            </Link>
-                                            <Link
-                                                href="/vendors"
-                                                className="-mx-3 block rounded-xl px-3 py-3 text-base font-semibold leading-7 text-gray-900 hover:bg-gray-50 transition-colors"
-                                                onClick={() => setIsMenuOpen(false)}
-                                            >
-                                                Vendors
-                                            </Link>
-                                            <Link
-                                                href="/vendor"
-                                                className="-mx-3 block rounded-xl px-3 py-3 text-base font-semibold leading-7 text-orange-600 hover:bg-orange-50 transition-colors"
-                                                onClick={() => setIsMenuOpen(false)}
-                                            >
-                                                🏪 Vendor Account
-                                            </Link>
-                                            <Link
-                                                href="/pricing"
-                                                className="-mx-3 block rounded-xl px-3 py-3 text-base font-semibold leading-7 text-gray-900 hover:bg-gray-50 transition-colors"
-                                                onClick={() => setIsMenuOpen(false)}
-                                            >
-                                                Pricing
-                                            </Link>
-                                            <Link
-                                                href="/contact"
-                                                className="-mx-3 block rounded-xl px-3 py-3 text-base font-semibold leading-7 text-gray-900 hover:bg-gray-50 transition-colors"
-                                                onClick={() => setIsMenuOpen(false)}
-                                            >
-                                                Contact
-                                            </Link>
-                                        </>
-                                    )}
-                                </div>
-                                <div className="py-6">
-                                    <div className="space-y-4">
-                                        <Link href="/login">
-                                            <button className="w-full text-left -mx-3 block rounded-xl px-3 py-3 text-base font-semibold leading-7 text-gray-900 hover:bg-gray-50 transition-colors">
                                                 Sign in
-                                            </button>
-                                        </Link>
-                                        <Link href="/register">
-                                            <button className="w-full btn-primary btn-md hover-lift">
+                                            </Link>
+                                            <Link
+                                                href="/register"
+                                                onClick={() => setIsMenuOpen(false)}
+                                                className="btn-primary btn-md hover-lift mt-2 flex w-full justify-center text-center"
+                                            >
                                                 Get Started
-                                            </button>
-                                        </Link>
+                                            </Link>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                </div>
-            )}
+                    </div>,
+                    document.body,
+                )}
         </header>
     );
 } 

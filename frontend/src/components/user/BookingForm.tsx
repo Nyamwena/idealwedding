@@ -24,8 +24,8 @@ export function BookingForm({
     location: '',
     amount: '',
     notes: '',
-    customerName: 'Sarah & John',
-    customerEmail: 'sarah.john@email.com',
+    customerName: '',
+    customerEmail: '',
   });
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -39,6 +39,7 @@ export function BookingForm({
     try {
       const response = await fetch('/api/user/bookings/create', {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
         },
@@ -60,9 +61,9 @@ export function BookingForm({
       if (onBookingCreated) {
         onBookingCreated(result.data);
       }
-    } catch (error) {
-      console.error('Failed to create booking:', error);
-      setError(error.message || 'Failed to create booking. Please try again.');
+    } catch (err) {
+      console.error('Failed to create booking:', err);
+      setError(err instanceof Error ? err.message : 'Failed to create booking. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -93,8 +94,8 @@ export function BookingForm({
                 location: '',
                 amount: '',
                 notes: '',
-                customerName: 'Sarah & John',
-                customerEmail: 'sarah.john@email.com',
+                customerName: '',
+                customerEmail: '',
               });
             }}
             className="btn-outline"
@@ -183,7 +184,7 @@ export function BookingForm({
 
           <div>
             <label htmlFor="customerName" className="block text-sm font-medium text-gray-700 mb-2">
-              Couple Names
+              Couple names (optional)
             </label>
             <input
               type="text"
@@ -191,7 +192,7 @@ export function BookingForm({
               name="customerName"
               value={formData.customerName}
               onChange={handleInputChange}
-              placeholder="e.g., Sarah & John"
+              placeholder="Uses your account name if empty"
               className="form-input w-full"
             />
           </div>
@@ -199,7 +200,7 @@ export function BookingForm({
 
         <div>
           <label htmlFor="customerEmail" className="block text-sm font-medium text-gray-700 mb-2">
-            Contact Email
+            Contact email (optional)
           </label>
           <input
             type="email"
@@ -207,7 +208,7 @@ export function BookingForm({
             name="customerEmail"
             value={formData.customerEmail}
             onChange={handleInputChange}
-            placeholder="e.g., sarah.john@email.com"
+            placeholder="Uses your account email if empty"
             className="form-input w-full"
           />
         </div>

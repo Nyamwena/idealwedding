@@ -107,9 +107,9 @@ export default function RegisterPage() {
       };
 
       await register(userData);
-      
-      // Redirect to dashboard
-      router.push('/dashboard');
+
+      // So the dashboard can show a first-time message (not "Welcome back")
+      router.push('/dashboard?registered=1');
     } catch (err: any) {
       console.error('Registration error:', err);
       if (err.message?.includes('Email already exists')) {

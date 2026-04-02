@@ -1,29 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readDataFile, writeDataFile } from '@/lib/dataFileStore';
+import {
+  readAdFundsWallets,
+  writeAdFundsWallets,
+  findAdFundsWalletIndexForAd,
+  dayKey,
+} from '@/lib/vendorAdFunds';
 
 function readAdvertisements() {
   return readDataFile<any>('advertisements.json', { bannerAds: [], adSenseConfig: {} });
 }
 function writeAdvertisements(data: any) {
   return writeDataFile('advertisements.json', data);
-}
-function readWallets() {
-  return readDataFile<any[]>('vendor-credit-wallets.json', []);
-}
-function writeWallets(data: any[]) {
-  return writeDataFile('vendor-credit-wallets.json', data);
-}
-function readTransactions() {
-  return readDataFile<any[]>('vendor-credit-transactions.json', []);
-}
-function writeTransactions(data: any[]) {
-  return writeDataFile('vendor-credit-transactions.json', data);
-}
-function readVendors() {
-  return readDataFile<any[]>('vendors.json', []);
-}
-function writeVendors(data: any[]) {
-  return writeDataFile('vendors.json', data);
 }
 function readClickEvents() {
   return readDataFile<any[]>('advertisement-click-events.json', []);
@@ -38,24 +26,14 @@ function writeBlocklist(data: any[]) {
   return writeDataFile('advertisement-click-blocklist.json', data);
 }
 
-function dayKey(input: string | Date) {
-  const d = new Date(input);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
-
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } },
 ) {
   try {
-    const [adsStore, wallets, transactions, vendors, clickEvents, blocklist] = await Promise.all([
+    const [adsStore, adFundsRows, clickEvents, blocklist] = await Promise.all([
       readAdvertisements(),
-      readWallets(),
-      readTransactions(),
-      readVendors(),
+      readAdFundsWallets(),
       readClickEvents(),
       readBlocklist(),
     ]);
@@ -66,20 +44,22 @@ export async function POST(
     }
 
     const ad = adsStore.bannerAds[adIndex];
+    if (String(ad.status || '').toLowerCase() !== 'active') {
+      return NextResponse.json(
+        { success: false, error: 'Advertisement is not approved for serving' },
+        { status: 400 },
+      );
+    }
+
     const clickCost = Number(ad.bidPerClick || ad.cost || 0);
     if (clickCost <= 0) {
       return NextResponse.json({ success: false, error: 'Invalid ad bid amount' }, { status: 400 });
     }
 
-    const walletIndex = wallets.findIndex(
-      (w: any) =>
-        String(w.vendorUserId || '') === String(ad.vendorUserId || '') ||
-        String(w.vendorId || '') === String(ad.vendorId || '') ||
-        String(w.email || '').toLowerCase() === String(ad.advertiserEmail || '').toLowerCase(),
-    );
-    if (walletIndex < 0 || Number(wallets[walletIndex].currentCredits || 0) < clickCost) {
+    const walletIndex = findAdFundsWalletIndexForAd(adFundsRows, ad);
+    if (walletIndex < 0 || Number(adFundsRows[walletIndex].balance || 0) < clickCost) {
       return NextResponse.json(
-        { success: false, error: 'Ad owner has insufficient credits' },
+        { success: false, error: 'Advertiser has insufficient ad funds' },
         { status: 400 },
       );
     }
@@ -123,7 +103,6 @@ export async function POST(
       );
     }
 
-    // Basic anti-fraud cooldown: same fingerprint cannot click same ad repeatedly in short interval.
     const latestEvent = clickEvents
       .filter((ev: any) => ev.adId === ad.id && ev.fingerprint === fingerprint)
       .sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0];
@@ -152,7 +131,10 @@ export async function POST(
     if (maxDailyBudget > 0) {
       const today = dayKey(now);
       const dailySpent = clickEvents
-        .filter((ev: any) => ev.adId === ad.id && dayKey(ev.timestamp) === today)
+        .filter(
+          (ev: any) =>
+            ev.adId === ad.id && !ev.blocked && dayKey(ev.timestamp) === today,
+        )
         .reduce((sum: number, ev: any) => sum + Number(ev.charge || 0), 0);
       if (dailySpent + clickCost > maxDailyBudget) {
         clickEvents.push({
@@ -176,11 +158,11 @@ export async function POST(
       }
     }
 
-    wallets[walletIndex] = {
-      ...wallets[walletIndex],
-      currentCredits: Number(wallets[walletIndex].currentCredits || 0) - clickCost,
-      totalUsed: Number(wallets[walletIndex].totalUsed || 0) + clickCost,
-      updatedAt: new Date().toISOString(),
+    adFundsRows[walletIndex] = {
+      ...adFundsRows[walletIndex],
+      balance: Number(adFundsRows[walletIndex].balance || 0) - clickCost,
+      totalSpent: Number(adFundsRows[walletIndex].totalSpent || 0) + clickCost,
+      updatedAt: now.toISOString(),
     };
 
     adsStore.bannerAds[adIndex] = {
@@ -195,20 +177,6 @@ export async function POST(
       updatedAt: new Date().toISOString(),
     };
 
-    transactions.push({
-      id: `tx_${Date.now()}`,
-      key: wallets[walletIndex].key || ad.vendorId,
-      vendorId: ad.vendorId,
-      vendorUserId: ad.vendorUserId,
-      email: wallets[walletIndex].email,
-      type: 'usage',
-      amount: -clickCost,
-      description: `Ad click charge for "${ad.title}"`,
-      timestamp: new Date().toISOString(),
-      referenceId: ad.id,
-      source: 'ad_click',
-    });
-
     clickEvents.push({
       id: `adclick_${Date.now()}`,
       adId: ad.id,
@@ -221,20 +189,9 @@ export async function POST(
       timestamp: now.toISOString(),
     });
 
-    const vendorIndex = vendors.findIndex(
-      (v: any) =>
-        String(v.id || '') === String(ad.vendorId || '') ||
-        String(v.email || '').toLowerCase() === String(wallets[walletIndex].email || '').toLowerCase(),
-    );
-    if (vendorIndex >= 0) {
-      vendors[vendorIndex] = { ...vendors[vendorIndex], credits: wallets[walletIndex].currentCredits };
-    }
-
     await Promise.all([
       writeAdvertisements(adsStore),
-      writeWallets(wallets),
-      writeTransactions(transactions),
-      writeVendors(vendors),
+      writeAdFundsWallets(adFundsRows),
       writeClickEvents(clickEvents),
     ]);
 

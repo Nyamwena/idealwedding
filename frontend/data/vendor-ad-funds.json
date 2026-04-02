@@ -1,0 +1,11 @@
+[
+  {
+    "vendorUserId": "1",
+    "vendorId": "vendor_1",
+    "email": "contact@elitephoto.com",
+    "balance": 100,
+    "totalAdded": 100,
+    "totalSpent": 0,
+    "updatedAt": "2024-10-01T12:00:00.000Z"
+  }
+]

@@ -1,5 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readDataFile, writeDataFile } from '@/lib/dataFileStore';
+import {
+  readAdFundsWallets,
+  getAdFundsBalanceForAd,
+  getPendingAdFundsForAd,
+  canServeSponsoredAd,
+  dayKey,
+} from '@/lib/vendorAdFunds';
 
 function readAdvertisements() {
   return readDataFile<any>('advertisements.json', {
@@ -135,9 +142,22 @@ export async function GET(request: NextRequest) {
     const advertisements = await readAdvertisements();
 
     if (type === 'bannerAds') {
+      const [clickEvents, adFunds] = await Promise.all([readClickEvents(), readAdFundsWallets()]);
+      const today = dayKey(new Date());
+      const data = (advertisements.bannerAds || []).map((ad: any) => {
+        const bal = getAdFundsBalanceForAd(adFunds, ad);
+        const pending = getPendingAdFundsForAd(adFunds, ad);
+        const canServe = canServeSponsoredAd(ad, bal, clickEvents, today);
+        return {
+          ...ad,
+          availableCredits: bal,
+          pendingAdFunds: pending,
+          canServePaidClick: canServe,
+        };
+      });
       return NextResponse.json({
         success: true,
-        data: advertisements.bannerAds || [],
+        data,
       });
     }
 

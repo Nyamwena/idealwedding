@@ -14,7 +14,7 @@ interface BannerAd {
   imageUrl: string;
   targetUrl: string;
   position: 'top' | 'sidebar' | 'bottom' | 'popup';
-  status: 'active' | 'inactive' | 'scheduled';
+  status: 'active' | 'inactive' | 'scheduled' | 'pending_review';
   startDate: string;
   endDate: string;
   clicks: number;
@@ -30,6 +30,7 @@ interface BannerAd {
   totalSpent?: number;
   maxDailyBudget?: number;
   availableCredits?: number;
+  pendingAdFunds?: number;
   canServePaidClick?: boolean;
 }
 
@@ -146,6 +147,14 @@ function normalizeFraudAudit(input: unknown): FraudAuditData {
   };
 }
 
+function bannerAdHasWalletTarget(ad: BannerAd): boolean {
+  return Boolean(
+    String(ad.vendorUserId || '').trim() ||
+      String(ad.vendorId || '').trim() ||
+      String(ad.advertiserEmail || '').trim(),
+  );
+}
+
 export default function AdminAdsPage() {
   const { user, isAdmin, logout } = useAuth();
   const router = useRouter();
@@ -195,6 +204,10 @@ export default function AdminAdsPage() {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [showAddFundsModal, setShowAddFundsModal] = useState(false);
+  const [addFundsForAd, setAddFundsForAd] = useState<BannerAd | null>(null);
+  const [addFundsAmount, setAddFundsAmount] = useState('50');
+  const [addFundsLoading, setAddFundsLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
@@ -216,7 +229,9 @@ export default function AdminAdsPage() {
       setError(null);
       
       // Load banner ads
-      const adsResponse = await fetch('/api/admin/advertisements?type=bannerAds');
+      const adsResponse = await fetch('/api/admin/advertisements?type=bannerAds', {
+        credentials: 'include',
+      });
       const adsResult = await adsResponse.json();
       
       if (!adsResponse.ok) {
@@ -285,7 +300,8 @@ export default function AdminAdsPage() {
     const styles = {
       active: 'bg-green-100 text-green-800',
       inactive: 'bg-red-100 text-red-800',
-      scheduled: 'bg-yellow-100 text-yellow-800'
+      scheduled: 'bg-yellow-100 text-yellow-800',
+      pending_review: 'bg-amber-100 text-amber-900',
     };
     return styles[status as keyof typeof styles] || 'bg-gray-100 text-gray-800';
   };
@@ -342,6 +358,101 @@ export default function AdminAdsPage() {
     } catch (error) {
       console.error('Error updating ad:', error);
       setError(error instanceof Error ? error.message : 'Failed to update ad');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const openAddFundsModal = (ad: BannerAd) => {
+    setAddFundsForAd(ad);
+    setAddFundsAmount('50');
+    setShowAddFundsModal(true);
+    setError(null);
+  };
+
+  const openAddFundsModalFromHeader = () => {
+    if (bannerAds.length === 0) {
+      setError('Create at least one banner ad before adding vendor ad funds.');
+      return;
+    }
+    const withLink = bannerAds.find(bannerAdHasWalletTarget);
+    openAddFundsModal(withLink || bannerAds[0]);
+  };
+
+  const handleAdminAddAdFunds = async () => {
+    if (!addFundsForAd) return;
+    const amount = Number(addFundsAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setError('Enter a positive amount');
+      return;
+    }
+    const hasTarget =
+      String(addFundsForAd.vendorUserId || '').trim() ||
+      String(addFundsForAd.vendorId || '').trim() ||
+      String(addFundsForAd.advertiserEmail || '').trim();
+    if (!hasTarget) {
+      setError('This ad needs vendorUserId, vendorId, or advertiserEmail before funds can be added.');
+      return;
+    }
+    try {
+      setAddFundsLoading(true);
+      setError(null);
+      const response = await fetch('/api/admin/vendor-ad-funds/add', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount,
+          vendorUserId: addFundsForAd.vendorUserId,
+          vendorId: addFundsForAd.vendorId,
+          advertiserEmail: addFundsForAd.advertiserEmail,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to add ad funds');
+      }
+      setSuccessMessage(`Added $${amount.toFixed(2)} approved ad funds for this advertiser.`);
+      setTimeout(() => setSuccessMessage(null), 6000);
+      setShowAddFundsModal(false);
+      setAddFundsForAd(null);
+      await loadAdvertisementData();
+    } catch (err) {
+      console.error(err);
+      setError(err instanceof Error ? err.message : 'Failed to add ad funds');
+    } finally {
+      setAddFundsLoading(false);
+    }
+  };
+
+  const handleApproveAdFunds = async (ad: BannerAd) => {
+    try {
+      setActionLoading(`${ad.id}-approve-funds`);
+      setError(null);
+      const response = await fetch('/api/admin/vendor-ad-funds/approve', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          vendorUserId: ad.vendorUserId,
+          vendorId: ad.vendorId,
+          advertiserEmail: ad.advertiserEmail,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to approve ad funds');
+      }
+      setSuccessMessage(
+        result.data?.moved > 0
+          ? `Approved $${Number(result.data.moved).toFixed(2)} in advertising funds.`
+          : result.message || 'No pending funds for this advertiser.',
+      );
+      setTimeout(() => setSuccessMessage(null), 6000);
+      await loadAdvertisementData();
+    } catch (err) {
+      console.error(err);
+      setError(err instanceof Error ? err.message : 'Failed to approve ad funds');
     } finally {
       setActionLoading(null);
     }
@@ -565,12 +676,20 @@ export default function AdminAdsPage() {
             <h1 className="text-3xl font-bold text-gray-900 mb-2">Advertisement Management</h1>
             <p className="text-gray-600">Manage banner ads and Google AdSense integration</p>
           </div>
-          <div className="flex space-x-3">
+          <div className="flex flex-wrap gap-3 justify-end">
             <button 
               onClick={() => setShowAddAdModal(true)}
               className="btn-primary"
             >
               + Add Banner Ad
+            </button>
+            <button
+              type="button"
+              onClick={openAddFundsModalFromHeader}
+              disabled={bannerAds.length === 0}
+              className="btn-outline border-primary-400 text-primary-800 hover:bg-primary-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Add vendor ad funds
             </button>
             <button 
               onClick={() => setShowAdSenseModal(true)}
@@ -663,9 +782,217 @@ export default function AdminAdsPage() {
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>
                 <option value="scheduled">Scheduled</option>
+                <option value="pending_review">Pending review</option>
               </select>
             </div>
           </div>
+        </div>
+
+        {/* Banner Ads Table */}
+        <div id="banner-advertisements" className="bg-white rounded-2xl shadow-lg overflow-hidden mb-8">
+          <div className="px-6 py-4 border-b border-gray-200 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">Banner Advertisements</h2>
+              <p className="text-sm text-gray-500 mt-1">
+                Use <strong>Add funds</strong> in the Funding column (or <strong>Add vendor ad funds</strong> above) to
+                credit a vendor&apos;s ad wallet.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={openAddFundsModalFromHeader}
+              disabled={bannerAds.length === 0}
+              className="shrink-0 rounded-md border border-primary-600 bg-primary-50 px-3 py-2 text-sm font-semibold text-primary-800 hover:bg-primary-100 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Add vendor ad funds
+            </button>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Ad
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Position
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Status
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Performance
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Bid / Cost
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Funding
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Advertiser
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {paginatedAds.map((ad) => (
+                  <tr key={ad.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        <div className="w-12 h-12 bg-gray-200 rounded-lg flex items-center justify-center mr-4">
+                          <span className="text-gray-500 text-sm">📢</span>
+                        </div>
+                        <div>
+                          <div className="text-sm font-medium text-gray-900">
+                            {ad.title}
+                          </div>
+                          <div className="text-sm text-gray-500">{ad.category}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getPositionBadge(ad.position)}`}>
+                        {ad.position}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusBadge(ad.status)}`}>
+                        {ad.status}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">
+                        {ad.clicks} clicks
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {ad.impressions} impressions ({ad.ctr}% CTR)
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      ${Number(ad.bidPerClick || ad.cost || 0).toFixed(2)}/click
+                      <div className="text-xs text-gray-500">
+                        Spent: ${Number(ad.totalSpent || 0).toFixed(2)}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <span
+                        className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                          ad.canServePaidClick ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                        }`}
+                      >
+                        {ad.canServePaidClick ? 'Live spend' : 'Not spending'}
+                      </span>
+                      {Number(ad.pendingAdFunds || 0) > 0 && (
+                        <span className="ml-1 inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-900">
+                          Pending ${Number(ad.pendingAdFunds || 0).toFixed(2)}
+                        </span>
+                      )}
+                      <div className="text-xs text-gray-500 mt-1">
+                        Approved: ${Number(ad.availableCredits || 0).toFixed(2)}
+                      </div>
+                      {Number(ad.pendingAdFunds || 0) > 0 && (
+                        <div className="text-xs text-amber-800 mt-0.5">
+                          Awaiting approval: ${Number(ad.pendingAdFunds || 0).toFixed(2)}
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => openAddFundsModal(ad)}
+                        disabled={
+                          !String(ad.vendorUserId || '').trim() &&
+                          !String(ad.vendorId || '').trim() &&
+                          !String(ad.advertiserEmail || '').trim()
+                        }
+                        title={
+                          !String(ad.vendorUserId || '').trim() &&
+                          !String(ad.vendorId || '').trim() &&
+                          !String(ad.advertiserEmail || '').trim()
+                            ? 'Set vendor id or advertiser email on the ad before adding funds'
+                            : 'Credit approved ad wallet for this advertiser'
+                        }
+                        className="mt-2 inline-flex items-center justify-center rounded-md border border-primary-600 bg-white px-2.5 py-1.5 text-xs font-semibold text-primary-800 shadow-sm hover:bg-primary-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        Add funds
+                      </button>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {ad.advertiser}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <div className="flex space-x-2">
+                        <button 
+                          onClick={() => handleViewAd(ad)}
+                          className="text-primary-600 hover:text-primary-900"
+                        >
+                          View
+                        </button>
+                        {(ad.status === 'inactive' || ad.status === 'pending_review') && (
+                          <button 
+                            onClick={() => handleAdAction(ad.id, 'activate')}
+                            disabled={actionLoading === `${ad.id}-activate`}
+                            className={`text-green-600 hover:text-green-900 ${actionLoading === `${ad.id}-activate` ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          >
+                            {actionLoading === `${ad.id}-activate` ? 'Activating...' : 'Activate'}
+                          </button>
+                        )}
+                        {ad.status === 'active' && (
+                          <button 
+                            onClick={() => handleAdAction(ad.id, 'deactivate')}
+                            disabled={actionLoading === `${ad.id}-deactivate`}
+                            className={`text-red-600 hover:text-red-900 ${actionLoading === `${ad.id}-deactivate` ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          >
+                            {actionLoading === `${ad.id}-deactivate` ? 'Deactivating...' : 'Deactivate'}
+                          </button>
+                        )}
+                        {Number(ad.pendingAdFunds || 0) > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => handleApproveAdFunds(ad)}
+                            disabled={actionLoading === `${ad.id}-approve-funds`}
+                            className={`text-amber-700 hover:text-amber-900 font-medium ${actionLoading === `${ad.id}-approve-funds` ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          >
+                            {actionLoading === `${ad.id}-approve-funds` ? 'Approving…' : 'Approve funds'}
+                          </button>
+                        )}
+                        <button 
+                          onClick={() => handleEditAd(ad)}
+                          className="text-gray-600 hover:text-gray-900"
+                        >
+                          Edit
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {paginatedAds.length === 0 && (
+                  <tr>
+                    <td className="px-6 py-8 text-sm text-gray-500 text-center" colSpan={8}>
+                      {bannerAds.length === 0
+                        ? 'No banner advertisements yet. Use Add Banner Ad, then Add vendor ad funds to credit wallets.'
+                        : 'No ads match your search or filter. Clear filters to see campaigns and Add funds links.'}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          <AdminPagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={filteredAds.length}
+            itemsPerPage={itemsPerPage}
+            onPageChange={(page) => {
+              if (page < 1 || page > totalPages) return;
+              setCurrentPage(page);
+            }}
+            onItemsPerPageChange={(items) => {
+              setItemsPerPage(items);
+              setCurrentPage(1);
+            }}
+          />
         </div>
 
         {/* Fraud Click Audit */}
@@ -793,150 +1120,7 @@ export default function AdminAdsPage() {
           </div>
         </div>
 
-        {/* Banner Ads Table */}
-        <div className="bg-white rounded-2xl shadow-lg overflow-hidden mb-8">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-900">Banner Advertisements</h2>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Ad
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Position
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Performance
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Bid / Cost
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Funding
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Advertiser
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {paginatedAds.map((ad) => (
-                  <tr key={ad.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <div className="w-12 h-12 bg-gray-200 rounded-lg flex items-center justify-center mr-4">
-                          <span className="text-gray-500 text-sm">📢</span>
-                        </div>
-                        <div>
-                          <div className="text-sm font-medium text-gray-900">
-                            {ad.title}
-                          </div>
-                          <div className="text-sm text-gray-500">{ad.category}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getPositionBadge(ad.position)}`}>
-                        {ad.position}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusBadge(ad.status)}`}>
-                        {ad.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">
-                        {ad.clicks} clicks
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        {ad.impressions} impressions ({ad.ctr}% CTR)
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      ${Number(ad.bidPerClick || ad.cost || 0).toFixed(2)}/click
-                      <div className="text-xs text-gray-500">
-                        Spent: ${Number(ad.totalSpent || 0).toFixed(2)}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      <span
-                        className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                          ad.canServePaidClick ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                        }`}
-                      >
-                        {ad.canServePaidClick ? 'Funded' : 'Depleted'}
-                      </span>
-                      <div className="text-xs text-gray-500 mt-1">
-                        Balance: ${Number(ad.availableCredits || 0).toFixed(2)}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {ad.advertiser}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex space-x-2">
-                        <button 
-                          onClick={() => handleViewAd(ad)}
-                          className="text-primary-600 hover:text-primary-900"
-                        >
-                          View
-                        </button>
-                        {ad.status === 'inactive' && (
-                          <button 
-                            onClick={() => handleAdAction(ad.id, 'activate')}
-                            disabled={actionLoading === `${ad.id}-activate`}
-                            className={`text-green-600 hover:text-green-900 ${actionLoading === `${ad.id}-activate` ? 'opacity-50 cursor-not-allowed' : ''}`}
-                          >
-                            {actionLoading === `${ad.id}-activate` ? 'Activating...' : 'Activate'}
-                          </button>
-                        )}
-                        {ad.status === 'active' && (
-                          <button 
-                            onClick={() => handleAdAction(ad.id, 'deactivate')}
-                            disabled={actionLoading === `${ad.id}-deactivate`}
-                            className={`text-red-600 hover:text-red-900 ${actionLoading === `${ad.id}-deactivate` ? 'opacity-50 cursor-not-allowed' : ''}`}
-                          >
-                            {actionLoading === `${ad.id}-deactivate` ? 'Deactivating...' : 'Deactivate'}
-                          </button>
-                        )}
-                        <button 
-                          onClick={() => handleEditAd(ad)}
-                          className="text-gray-600 hover:text-gray-900"
-                        >
-                          Edit
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <AdminPagination
-            currentPage={currentPage}
-            totalPages={totalPages}
-            totalItems={filteredAds.length}
-            itemsPerPage={itemsPerPage}
-            onPageChange={(page) => {
-              if (page < 1 || page > totalPages) return;
-              setCurrentPage(page);
-            }}
-            onItemsPerPageChange={(items) => {
-              setItemsPerPage(items);
-              setCurrentPage(1);
-            }}
-          />
-        </div>
+
 
         {/* Google AdSense Configuration */}
         <div className="bg-white rounded-2xl shadow-lg p-6">
@@ -1424,6 +1608,93 @@ export default function AdminAdsPage() {
           </div>
         )}
 
+        {/* Admin: add advertising funds */}
+        {showAddFundsModal && addFundsForAd && (
+          <div className="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true">
+            <div className="flex min-h-screen items-end justify-center px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+              <button
+                type="button"
+                className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
+                aria-label="Close"
+                onClick={() => {
+                  if (!addFundsLoading) {
+                    setShowAddFundsModal(false);
+                    setAddFundsForAd(null);
+                  }
+                }}
+              />
+              <span className="hidden sm:inline-block sm:h-screen sm:align-middle" aria-hidden>
+                &#8203;
+              </span>
+              <div className="inline-block w-full max-w-md transform overflow-hidden rounded-lg bg-white text-left align-bottom shadow-xl transition-all sm:my-8 sm:align-middle">
+                <div className="px-4 pt-5 pb-4 sm:p-6">
+                  <h3 className="text-lg font-medium text-gray-900">Add advertising funds</h3>
+                  <p className="mt-1 text-sm text-gray-600">
+                    Credits the <strong>approved</strong> balance for this advertiser&apos;s ad wallet (spendable on
+                    clicks immediately).
+                  </p>
+                  <label className="mt-4 block text-sm font-medium text-gray-700">Campaign (advertiser wallet)</label>
+                  <select
+                    className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    value={addFundsForAd.id}
+                    onChange={(e) => {
+                      const next = bannerAds.find((a) => a.id === e.target.value);
+                      if (next) {
+                        setAddFundsForAd(next);
+                        setError(null);
+                      }
+                    }}
+                  >
+                    {bannerAds.map((ad) => (
+                      <option key={ad.id} value={ad.id} disabled={!bannerAdHasWalletTarget(ad)}>
+                        {ad.title} — {ad.advertiser}
+                        {!bannerAdHasWalletTarget(ad) ? ' (set vendor id or email in Edit)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-2 text-xs text-gray-600">
+                    <span className="font-medium">Wallet target:</span>{' '}
+                    {addFundsForAd.advertiserEmail ||
+                      addFundsForAd.vendorId ||
+                      addFundsForAd.vendorUserId ||
+                      '— add advertiser email or vendor id on this ad'}
+                  </p>
+                  <label className="mt-4 block text-sm font-medium text-gray-700">Amount (USD)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={addFundsAmount}
+                    onChange={(e) => setAddFundsAmount(e.target.value)}
+                    className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  />
+                </div>
+                <div className="bg-gray-50 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6">
+                  <button
+                    type="button"
+                    disabled={addFundsLoading}
+                    onClick={handleAdminAddAdFunds}
+                    className="inline-flex w-full justify-center rounded-md border border-transparent bg-primary-600 px-4 py-2 text-base font-medium text-white shadow-sm hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50"
+                  >
+                    {addFundsLoading ? 'Adding…' : 'Add to wallet'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={addFundsLoading}
+                    onClick={() => {
+                      setShowAddFundsModal(false);
+                      setAddFundsForAd(null);
+                    }}
+                    className="mt-3 inline-flex w-full justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-base font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none sm:mt-0 sm:w-auto sm:text-sm"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Ad Detail Modal */}
         {showAdModal && selectedAd && (
           <div className="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
@@ -1457,12 +1728,18 @@ export default function AdminAdsPage() {
                             <p><span className="font-medium">CTR:</span> {selectedAd.ctr}%</p>
                             <p><span className="font-medium">Cost:</span> ${selectedAd.cost}</p>
                             <p>
-                              <span className="font-medium">Ad Balance:</span>{' '}
+                              <span className="font-medium">Approved ad balance:</span>{' '}
                               ${Number(selectedAd.availableCredits || 0).toFixed(2)}
                             </p>
+                            {Number(selectedAd.pendingAdFunds || 0) > 0 && (
+                              <p>
+                                <span className="font-medium">Pending approval:</span>{' '}
+                                ${Number(selectedAd.pendingAdFunds || 0).toFixed(2)}
+                              </p>
+                            )}
                             <p>
-                              <span className="font-medium">Funding Status:</span>{' '}
-                              {selectedAd.canServePaidClick ? 'Funded' : 'Depleted'}
+                              <span className="font-medium">Sponsored spend:</span>{' '}
+                              {selectedAd.canServePaidClick ? 'Eligible (approved balance covers bid & cap)' : 'Not eligible'}
                             </p>
                             <p><span className="font-medium">Start Date:</span> {selectedAd.startDate}</p>
                             <p><span className="font-medium">End Date:</span> {selectedAd.endDate}</p>

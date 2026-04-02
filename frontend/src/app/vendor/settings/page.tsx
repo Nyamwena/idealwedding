@@ -1,8 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { useAuth } from '@/hooks/useAuth';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 import { AdminBreadcrumb } from '@/components/admin/AdminBreadcrumb';
@@ -40,40 +38,41 @@ interface VendorSettings {
   };
 }
 
+const defaultVendorSettings = (): VendorSettings => ({
+  notifications: {
+    emailNotifications: true,
+    smsNotifications: false,
+    pushNotifications: true,
+    newBookingAlerts: true,
+    quoteRequestAlerts: true,
+    paymentAlerts: true,
+    reviewAlerts: true,
+  },
+  privacy: {
+    showContactInfo: true,
+    showPricing: true,
+    allowDirectContact: true,
+    showAvailability: true,
+  },
+  business: {
+    autoAcceptBookings: false,
+    requireDeposit: true,
+    depositPercentage: 50,
+    cancellationPolicy:
+      'Full refund if cancelled 30+ days before event. 50% refund if cancelled 14-29 days before. No refund if cancelled less than 14 days before.',
+    refundPolicy: 'Refunds will be processed within 5-7 business days to the original payment method.',
+  },
+  account: {
+    email: '',
+    phone: '',
+    timezone: 'America/New_York',
+    currency: 'USD',
+    language: 'en',
+  },
+});
+
 export default function VendorSettingsPage() {
-  const { user,  isVendor, logout } = useAuth();
-  const router = useRouter();
-  const [settings, setSettings] = useState<VendorSettings>({
-    notifications: {
-      emailNotifications: true,
-      smsNotifications: false,
-      pushNotifications: true,
-      newBookingAlerts: true,
-      quoteRequestAlerts: true,
-      paymentAlerts: true,
-      reviewAlerts: true,
-    },
-    privacy: {
-      showContactInfo: true,
-      showPricing: true,
-      allowDirectContact: true,
-      showAvailability: true,
-    },
-    business: {
-      autoAcceptBookings: false,
-      requireDeposit: true,
-      depositPercentage: 50,
-      cancellationPolicy: 'Full refund if cancelled 30+ days before event. 50% refund if cancelled 14-29 days before. No refund if cancelled less than 14 days before.',
-      refundPolicy: 'Refunds will be processed within 5-7 business days to the original payment method.',
-    },
-    account: {
-      email: 'info@elegantphotography.com',
-      phone: '+1 (555) 123-4567',
-      timezone: 'America/New_York',
-      currency: 'USD',
-      language: 'en',
-    },
-  });
+  const [settings, setSettings] = useState<VendorSettings>(defaultVendorSettings);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<'notifications' | 'privacy' | 'business' | 'account'>('notifications');
@@ -84,21 +83,21 @@ export default function VendorSettingsPage() {
     const fetchSettings = async () => {
       setLoading(true);
       try {
-        // Simulate API call
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        // Settings are already initialized with default values
+        const res = await fetch('/api/vendor/settings', { credentials: 'include', cache: 'no-store' });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || 'Failed to load settings');
+        setSettings({ ...defaultVendorSettings(), ...json.data });
       } catch (error) {
         console.error('Failed to fetch settings:', error);
         toast.error('Failed to load settings');
+        setSettings(defaultVendorSettings());
       } finally {
         setLoading(false);
       }
     };
 
-    if (isVendor) {
-      fetchSettings();
-    }
-  }, [isVendor]);
+    fetchSettings();
+  }, []);
 
   const handleNotificationChange = (key: keyof VendorSettings['notifications'], value: boolean) => {
     setSettings(prev => ({
@@ -143,8 +142,15 @@ export default function VendorSettingsPage() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const res = await fetch('/api/vendor/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(settings),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed to save');
+      setSettings({ ...settings, ...json.data });
       toast.success('Settings saved successfully!');
     } catch (error) {
       console.error('Failed to save settings:', error);
@@ -155,10 +161,6 @@ export default function VendorSettingsPage() {
   };
 
 
-
-  if (!isVendor) {
-    return null; // Will redirect if not vendor
-  }
 
   const tabs = [
     { id: 'notifications', label: 'Notifications', icon: '🔔' },

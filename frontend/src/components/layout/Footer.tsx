@@ -2,7 +2,23 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { Facebook, Instagram, Linkedin } from 'lucide-react';
 import { Logo } from '../ui/Logo';
+
+/** Current X (Twitter) mark — Lucide still ships the legacy bird icon. */
+function XSocialIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      xmlns="http://www.w3.org/2000/svg"
+      fill="currentColor"
+      className={className}
+      aria-hidden
+    >
+      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+    </svg>
+  );
+}
 
 export function Footer() {
   const [isMounted, setIsMounted] = useState(false);
@@ -34,22 +50,34 @@ export function Footer() {
               Your complete wedding planning platform. Connect with vendors, manage guests, 
               and create the wedding of your dreams with our modern, intuitive tools.
             </p>
-            <div className="flex space-x-6">
-              <a href="#" className="text-gray-400 hover:text-primary-400 transition-colors duration-300 hover-scale">
+            <div className="flex flex-wrap items-center gap-2">
+              <a
+                href="#"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-gray-400 transition-colors duration-300 hover:bg-white/10 hover:text-[#1877F2] hover-scale"
+              >
                 <span className="sr-only">Facebook</span>
-                <span className="text-2xl">📘</span>
+                <Facebook className="h-6 w-6" strokeWidth={1.75} aria-hidden />
               </a>
-              <a href="#" className="text-gray-400 hover:text-primary-400 transition-colors duration-300 hover-scale">
+              <a
+                href="#"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-gray-400 transition-colors duration-300 hover:bg-white/10 hover:text-[#E4405F] hover-scale"
+              >
                 <span className="sr-only">Instagram</span>
-                <span className="text-2xl">📷</span>
+                <Instagram className="h-6 w-6" strokeWidth={1.75} aria-hidden />
               </a>
-              <a href="#" className="text-gray-400 hover:text-primary-400 transition-colors duration-300 hover-scale">
-                <span className="sr-only">Twitter</span>
-                <span className="text-2xl">🐦</span>
+              <a
+                href="#"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-gray-400 transition-colors duration-300 hover:bg-white/10 hover:text-white hover-scale"
+              >
+                <span className="sr-only">X</span>
+                <XSocialIcon className="h-[1.35rem] w-[1.35rem]" />
               </a>
-              <a href="#" className="text-gray-400 hover:text-primary-400 transition-colors duration-300 hover-scale">
+              <a
+                href="#"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-gray-400 transition-colors duration-300 hover:bg-white/10 hover:text-[#0A66C2] hover-scale"
+              >
                 <span className="sr-only">LinkedIn</span>
-                <span className="text-2xl">💼</span>
+                <Linkedin className="h-6 w-6" strokeWidth={1.75} aria-hidden />
               </a>
             </div>
           </div>
@@ -79,9 +107,14 @@ export function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/blog" className="text-gray-400 hover:text-white transition-colors duration-300 hover:translate-x-1 inline-block">
+                <a
+                  href="https://idealweddings.co.zw"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-gray-400 hover:text-white transition-colors duration-300 hover:translate-x-1 inline-block"
+                >
                   Wedding Blog
-                </Link>
+                </a>
               </li>
             </ul>
           </div>

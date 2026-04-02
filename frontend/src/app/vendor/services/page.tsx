@@ -1,9 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useAuth } from '@/hooks/useAuth';
 import { useVendorProfile } from '@/hooks/useVendorProfile';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
@@ -11,9 +9,7 @@ import { AdminBreadcrumb } from '@/components/admin/AdminBreadcrumb';
 import { VendorTopMenu } from '@/components/vendor/VendorTopMenu';
 
 export default function VendorServicesPage() {
-  const { user,  isVendor } = useAuth();
   const { profile, loading: profileLoading, addService, updateService, deleteService } = useVendorProfile();
-  const router = useRouter();
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingService, setEditingService] = useState<any>(null);
@@ -110,11 +106,6 @@ export default function VendorServicesPage() {
     }
   };
 
-
-
-  if (!isVendor) {
-    return null;
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-secondary-50">

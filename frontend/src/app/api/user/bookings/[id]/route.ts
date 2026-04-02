@@ -1,38 +1,43 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readDataFile, writeDataFile } from '@/lib/dataFileStore';
+import { getAuthenticatedUserFromRequest } from '@/lib/auth';
+import { buildVendorNameResolver } from '@/lib/userBookingVendorNames';
 
-// Helper to read bookings from file
-const getBookings = () => {
-  return readDataFile<any[]>('bookings.json', []);
-};
+const getBookings = () => readDataFile<any[]>('bookings.json', []);
+const saveBookings = (bookings: any[]) => writeDataFile('bookings.json', bookings);
 
-// Helper to write bookings to file
-const saveBookings = (bookings: any[]) => {
-  return writeDataFile('bookings.json', bookings);
-};
-
-// GET /api/user/bookings/[id] - Get specific booking
+// GET /api/user/bookings/[id]
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const bookingId = params.id;
-    const userId = 'customer_001'; // Mock user ID - in real app, get from auth
+    const user = await getAuthenticatedUserFromRequest(request);
+    if (!user) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
 
+    const bookingId = params.id;
+    const customerId = String(user.id);
     const allBookings = await getBookings();
-    const booking = allBookings.find((b: any) => b.id === bookingId && b.customerId === userId);
+    const booking = allBookings.find((b: any) => {
+      const bid = String(b.customerId ?? '');
+      if (!bid || bid.startsWith('__seed_')) return false;
+      return b.id === bookingId && bid === customerId;
+    });
 
     if (!booking) {
-      return NextResponse.json(
-        { success: false, error: 'Booking not found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ success: false, error: 'Booking not found' }, { status: 404 });
     }
+
+    const resolveName = await buildVendorNameResolver();
 
     return NextResponse.json({
       success: true,
-      data: booking,
+      data: {
+        ...booking,
+        vendorName: resolveName(String(booking.vendorId ?? '')),
+      },
     });
   } catch (error) {
     console.error('Error in GET /api/user/bookings/[id]:', error);
@@ -43,38 +48,40 @@ export async function GET(
   }
 }
 
-// PUT /api/user/bookings/[id] - Update booking (cancel, complete, etc.)
+// PUT /api/user/bookings/[id]
 export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
+    const user = await getAuthenticatedUserFromRequest(request);
+    if (!user) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
     const bookingId = params.id;
-    const userId = 'customer_001'; // Mock user ID - in real app, get from auth
+    const customerId = String(user.id);
     const body = await request.json();
     const { action } = body;
 
     if (!action) {
-      return NextResponse.json(
-        { success: false, error: 'Action is required' },
-        { status: 400 }
-      );
+      return NextResponse.json({ success: false, error: 'Action is required' }, { status: 400 });
     }
 
     let allBookings = await getBookings();
-    const bookingIndex = allBookings.findIndex((b: any) => b.id === bookingId && b.customerId === userId);
+    const bookingIndex = allBookings.findIndex((b: any) => {
+      const bid = String(b.customerId ?? '');
+      if (!bid || bid.startsWith('__seed_')) return false;
+      return b.id === bookingId && bid === customerId;
+    });
 
     if (bookingIndex === -1) {
-      return NextResponse.json(
-        { success: false, error: 'Booking not found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ success: false, error: 'Booking not found' }, { status: 404 });
     }
 
     const booking = allBookings[bookingIndex];
     let updatedBooking = { ...booking };
 
-    // Handle different actions
     switch (action) {
       case 'cancel':
         if (booking.status === 'pending' || booking.status === 'confirmed') {
@@ -101,21 +108,20 @@ export async function PUT(
         break;
 
       default:
-        return NextResponse.json(
-          { success: false, error: 'Invalid action' },
-          { status: 400 }
-        );
+        return NextResponse.json({ success: false, error: 'Invalid action' }, { status: 400 });
     }
 
-    // Update the booking in the array
     allBookings[bookingIndex] = updatedBooking;
-
-    // Save to file
     await saveBookings(allBookings);
+
+    const resolveName = await buildVendorNameResolver();
 
     return NextResponse.json({
       success: true,
-      data: updatedBooking,
+      data: {
+        ...updatedBooking,
+        vendorName: resolveName(String(updatedBooking.vendorId ?? '')),
+      },
       message: `Booking ${action} successfully`,
     });
   } catch (error) {
@@ -126,4 +132,3 @@ export async function PUT(
     );
   }
 }
-

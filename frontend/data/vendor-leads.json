@@ -2,6 +2,8 @@
   {
     "id": "lead_001",
     "vendorId": "vendor_001",
+    "vendorUserId": "1",
+    "creditsSettled": true,
     "coupleName": "Sarah & John",
     "coupleEmail": "sarah.john@email.com",
     "couplePhone": "+1 (555) 123-4567",
@@ -19,6 +21,8 @@
   {
     "id": "lead_002",
     "vendorId": "vendor_001",
+    "vendorUserId": "1",
+    "creditsSettled": true,
     "coupleName": "Emily & Michael",
     "coupleEmail": "emily.michael@email.com",
     "couplePhone": "+1 (555) 234-5678",
@@ -36,6 +40,8 @@
   {
     "id": "lead_003",
     "vendorId": "vendor_001",
+    "vendorUserId": "1",
+    "creditsSettled": true,
     "coupleName": "Jessica & David",
     "coupleEmail": "jessica.david@email.com",
     "couplePhone": "+1 (555) 345-6789",
@@ -53,6 +59,8 @@
   {
     "id": "lead_004",
     "vendorId": "vendor_001",
+    "vendorUserId": "1",
+    "creditsSettled": true,
     "coupleName": "Amanda & Robert",
     "coupleEmail": "amanda.robert@email.com",
     "couplePhone": "+1 (555) 456-7890",
@@ -70,6 +78,8 @@
   {
     "id": "lead_005",
     "vendorId": "vendor_001",
+    "vendorUserId": "1",
+    "creditsSettled": true,
     "coupleName": "Lisa & Mark",
     "coupleEmail": "lisa.mark@email.com",
     "couplePhone": "+1 (555) 567-8901",
@@ -87,6 +97,8 @@
   {
     "id": "lead_006",
     "vendorId": "vendor_001",
+    "vendorUserId": "1",
+    "creditsSettled": true,
     "coupleName": "Rachel & Tom",
     "coupleEmail": "rachel.tom@email.com",
     "couplePhone": "+1 (555) 678-9012",
@@ -104,6 +116,8 @@
   {
     "id": "lead_007",
     "vendorId": "vendor_001",
+    "vendorUserId": "1",
+    "creditsSettled": true,
     "coupleName": "Maria & Carlos",
     "coupleEmail": "maria.carlos@email.com",
     "couplePhone": "+1 (555) 789-0123",

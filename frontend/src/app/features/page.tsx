@@ -166,15 +166,11 @@ export default function FeaturesPage() {
             Start planning your dream wedding today with our comprehensive platform.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link href="/register">
-              <button className="btn-primary btn-lg hover-lift">
-                Start Planning Now
-              </button>
+            <Link href="/register" className="btn-primary btn-lg hover-lift inline-flex justify-center">
+              Start Planning Now
             </Link>
-            <Link href="/pricing">
-              <button className="btn-outline btn-lg hover-lift">
-                View Pricing
-              </button>
+            <Link href="/pricing" className="btn-outline btn-lg hover-lift inline-flex justify-center">
+              View Pricing
             </Link>
           </div>
         </div>

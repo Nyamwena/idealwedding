@@ -1,25 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readDataFile } from '@/lib/dataFileStore';
+import { getAuthenticatedUserFromRequest } from '@/lib/auth';
+import { buildVendorNameResolver } from '@/lib/userBookingVendorNames';
 
-// Helper to read bookings from file
-const getBookings = () => {
-  return readDataFile<any[]>('bookings.json', []);
-};
+const getBookings = () => readDataFile<any[]>('bookings.json', []);
 
-// GET /api/user/bookings - Get all bookings for a user
+// GET /api/user/bookings — bookings for the signed-in user only
 export async function GET(request: NextRequest) {
   try {
-    // In a real app, you'd get the user ID from the authenticated user
-    const userId = 'customer_001'; // Mock user ID - in real app, get from auth
+    const user = await getAuthenticatedUserFromRequest(request);
+    if (!user) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
 
+    const customerId = String(user.id);
     const allBookings = await getBookings();
-    
-    // Filter bookings for this user and add vendor names
+    const resolveName = await buildVendorNameResolver();
+
+    // Only rows for this JWT user; never return demo/seed rows (__seed_* customerIds).
     const userBookings = allBookings
-      .filter((booking: any) => booking.customerId === userId)
+      .filter((booking: any) => {
+        const bid = String(booking.customerId ?? '');
+        if (!bid || bid.startsWith('__seed_')) return false;
+        return bid === customerId;
+      })
       .map((booking: any) => ({
         ...booking,
-        vendorName: getVendorName(booking.vendorId), // Add vendor name
+        vendorName: resolveName(String(booking.vendorId ?? '')),
       }));
 
     return NextResponse.json({
@@ -34,18 +41,3 @@ export async function GET(request: NextRequest) {
     );
   }
 }
-
-// Helper function to get vendor name (mock implementation)
-const getVendorName = (vendorId: string) => {
-  // In a real app, you'd fetch this from the vendors database
-  const vendorNames: { [key: string]: string } = {
-    'vendor_001': 'Perfect Moments Photography',
-    'vendor_002': 'Elegant Wedding Planning',
-    'vendor_003': 'Dream Wedding Videos',
-    'vendor_004': 'Garden Party Catering',
-    'vendor_005': 'Blissful Floral Designs',
-  };
-  
-  return vendorNames[vendorId] || 'Unknown Vendor';
-};
-

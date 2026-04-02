@@ -1,8 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { useAuth } from '@/hooks/useAuth';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 import { AdminBreadcrumb } from '@/components/admin/AdminBreadcrumb';
@@ -40,8 +38,6 @@ interface ReviewStats {
 }
 
 export default function VendorReviewsPage() {
-  const { user, isVendor, logout } = useAuth();
-  const router = useRouter();
   const [reviews, setReviews] = useState<Review[]>([]);
   const [stats, setStats] = useState<ReviewStats>({
     averageRating: 0,
@@ -66,131 +62,36 @@ export default function VendorReviewsPage() {
     const fetchReviews = async () => {
       setLoading(true);
       try {
-        // Simulate API call
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        // Mock reviews data
-        const mockReviews: Review[] = [
-          {
-            id: '1',
-            customerName: 'Sarah & John Smith',
-            customerEmail: 'sarah.smith@email.com',
-            serviceName: 'Wedding Photography Package',
-            rating: 5,
-            title: 'Absolutely Amazing!',
-            comment: 'Our photographer was incredible! They captured every special moment of our wedding day. The photos are stunning and we couldn\'t be happier. Highly recommend!',
-            response: 'Thank you so much Sarah & John! It was such a joy to capture your beautiful wedding day. Wishing you both a lifetime of happiness!',
-            responseDate: '2024-09-25',
-            isPublic: true,
-            isVerified: true,
-            createdAt: '2024-09-24',
-            updatedAt: '2024-09-25',
-          },
-          {
-            id: '2',
-            customerName: 'Emily & Michael Johnson',
-            customerEmail: 'emily.johnson@email.com',
-            serviceName: 'Engagement Session',
-            rating: 5,
-            title: 'Perfect Engagement Photos',
-            comment: 'The engagement session was so much fun! The photographer made us feel comfortable and the photos turned out beautifully. Great experience!',
-            response: '',
-            responseDate: '',
-            isPublic: true,
-            isVerified: true,
-            createdAt: '2024-09-22',
-            updatedAt: '2024-09-22',
-          },
-          {
-            id: '3',
-            customerName: 'Jessica & David Wilson',
-            customerEmail: 'jessica.wilson@email.com',
-            serviceName: 'Event Videography',
-            rating: 4,
-            title: 'Great Video Quality',
-            comment: 'The video quality was excellent and the editing was professional. The only minor issue was the delivery time, but overall very satisfied.',
-            response: 'Thank you for the feedback Jessica & David! I\'m glad you loved the video quality. I\'ve noted your feedback about delivery time and will work to improve that.',
-            responseDate: '2024-09-21',
-            isPublic: true,
-            isVerified: true,
-            createdAt: '2024-09-20',
-            updatedAt: '2024-09-21',
-          },
-          {
-            id: '4',
-            customerName: 'Amanda & Robert Brown',
-            customerEmail: 'amanda.brown@email.com',
-            serviceName: 'Wedding Photography Package',
-            rating: 5,
-            title: 'Exceeded Expectations',
-            comment: 'From the initial consultation to the final delivery, everything was perfect. The photographer was professional, creative, and captured our day beautifully.',
-            response: 'Thank you Amanda & Robert! It was a pleasure working with you both. Your wedding was absolutely beautiful and I\'m thrilled you love the photos!',
-            responseDate: '2024-09-30',
-            isPublic: true,
-            isVerified: true,
-            createdAt: '2024-09-29',
-            updatedAt: '2024-09-30',
-          },
-          {
-            id: '5',
-            customerName: 'Lisa & Mark Davis',
-            customerEmail: 'lisa.davis@email.com',
-            serviceName: 'Portrait Photography',
-            rating: 3,
-            title: 'Good but could be better',
-            comment: 'The photos were decent but I expected more creativity. The photographer was nice but seemed rushed. Overall okay experience.',
-            response: '',
-            responseDate: '',
-            isPublic: true,
-            isVerified: true,
-            createdAt: '2024-09-15',
-            updatedAt: '2024-09-15',
-          },
-          {
-            id: '6',
-            customerName: 'Jennifer & Tom Wilson',
-            customerEmail: 'jennifer.wilson@email.com',
-            serviceName: 'Wedding Photography Package',
-            rating: 5,
-            title: 'Outstanding Service',
-            comment: 'Professional, creative, and delivered exactly what we wanted. The photos are magazine-worthy and we\'ve received so many compliments!',
-            response: 'Thank you Jennifer & Tom! Your wedding was absolutely stunning and it was an honor to capture it. So happy you love the photos!',
-            responseDate: '2024-09-18',
-            isPublic: true,
-            isVerified: true,
-            createdAt: '2024-09-17',
-            updatedAt: '2024-09-18',
-          },
-        ];
+        const res = await fetch('/api/vendor/reviews', { credentials: 'include', cache: 'no-store' });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || 'Failed to load reviews');
 
-        // Calculate stats
-        const totalReviews = mockReviews.length;
-        const averageRating = mockReviews.reduce((sum, review) => sum + review.rating, 0) / totalReviews;
+        const list = (json.data || []) as Review[];
+        setReviews(list);
+
+        const totalReviews = list.length;
+        const averageRating =
+          totalReviews > 0 ? list.reduce((sum, review) => sum + review.rating, 0) / totalReviews : 0;
         const ratingDistribution = {
-          5: mockReviews.filter(r => r.rating === 5).length,
-          4: mockReviews.filter(r => r.rating === 4).length,
-          3: mockReviews.filter(r => r.rating === 3).length,
-          2: mockReviews.filter(r => r.rating === 2).length,
-          1: mockReviews.filter(r => r.rating === 1).length,
+          5: list.filter((r) => r.rating === 5).length,
+          4: list.filter((r) => r.rating === 4).length,
+          3: list.filter((r) => r.rating === 3).length,
+          2: list.filter((r) => r.rating === 2).length,
+          1: list.filter((r) => r.rating === 1).length,
         };
-        const respondedReviews = mockReviews.filter(r => r.response).length;
-        const responseRate = (respondedReviews / totalReviews) * 100;
-        const recentRating = mockReviews
-          .filter(r => {
-            const reviewDate = new Date(r.createdAt);
-            const thirtyDaysAgo = new Date();
-            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-            return reviewDate >= thirtyDaysAgo;
-          })
-          .reduce((sum, review) => sum + review.rating, 0) / 
-          Math.max(mockReviews.filter(r => {
-            const reviewDate = new Date(r.createdAt);
-            const thirtyDaysAgo = new Date();
-            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-            return reviewDate >= thirtyDaysAgo;
-          }).length, 1);
+        const respondedReviews = list.filter((r) => r.response).length;
+        const responseRate = totalReviews > 0 ? (respondedReviews / totalReviews) * 100 : 0;
+        const recentList = list.filter((r) => {
+          const reviewDate = new Date(r.createdAt);
+          const thirtyDaysAgo = new Date();
+          thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+          return reviewDate >= thirtyDaysAgo;
+        });
+        const recentRating =
+          recentList.length > 0
+            ? recentList.reduce((sum, review) => sum + review.rating, 0) / recentList.length
+            : 0;
 
-        setReviews(mockReviews);
         setStats({
           averageRating,
           totalReviews,
@@ -201,15 +102,21 @@ export default function VendorReviewsPage() {
       } catch (error) {
         console.error('Failed to fetch reviews:', error);
         toast.error('Failed to load reviews');
+        setReviews([]);
+        setStats({
+          averageRating: 0,
+          totalReviews: 0,
+          ratingDistribution: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 },
+          responseRate: 0,
+          recentRating: 0,
+        });
       } finally {
         setLoading(false);
       }
     };
 
-    if (isVendor) {
-      fetchReviews();
-    }
-  }, [isVendor]);
+    fetchReviews();
+  }, []);
 
   const filteredReviews = reviews.filter(review => {
     const matchesSearch = review.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -236,16 +143,29 @@ export default function VendorReviewsPage() {
     }
 
     try {
-      setReviews(prev => prev.map(review => 
-        review.id === selectedReview.id 
-          ? { 
-              ...review, 
-              response: responseText,
-              responseDate: new Date().toISOString().split('T')[0],
-              updatedAt: new Date().toISOString()
-            }
-          : review
-      ));
+      const res = await fetch('/api/vendor/reviews', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          testimonialId: selectedReview.id,
+          vendorResponse: responseText.trim(),
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json.error || 'Failed to save');
+      }
+      const updated = json.data as Review;
+      setReviews((prev) => {
+        const next = prev.map((review) => (review.id === selectedReview.id ? updated : review));
+        const respondedCount = next.filter((r) => r.response).length;
+        setStats((s) => ({
+          ...s,
+          responseRate: next.length > 0 ? (respondedCount / next.length) * 100 : 0,
+        }));
+        return next;
+      });
 
       setShowResponseModal(false);
       setSelectedReview(null);
@@ -267,11 +187,6 @@ export default function VendorReviewsPage() {
     ));
   };
 
-
-
-  if (!isVendor) {
-    return null; // Will redirect if not vendor
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-secondary-50">

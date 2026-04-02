@@ -9,18 +9,16 @@ import { Footer } from '@/components/layout/Footer';
 import { AdminBreadcrumb } from '@/components/admin/AdminBreadcrumb';
 
 export default function WorkingVendorPage() {
-  const { user,  isVendor, logout } = useAuth();
+  const { logout } = useAuth();
   const router = useRouter();
   const [loading, setLoading] = useState(true);
 
 
 
   useEffect(() => {
-    if (isVendor) {
-      // Simulate loading
-      setTimeout(() => setLoading(false), 1000);
-    }
-  }, [isVendor]);
+    const t = setTimeout(() => setLoading(false), 1000);
+    return () => clearTimeout(t);
+  }, []);
 
   const handleLogout = () => {
     logout();
@@ -28,10 +26,6 @@ export default function WorkingVendorPage() {
   };
 
 
-
-  if (!isVendor) {
-    return null; // Will redirect if not vendor
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-secondary-50">

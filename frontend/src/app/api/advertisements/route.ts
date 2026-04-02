@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readDataFile, writeDataFile } from '@/lib/dataFileStore';
+import {
+  readAdFundsWallets,
+  getAdFundsBalanceForAd,
+  canServeSponsoredAd,
+  dayKey,
+} from '@/lib/vendorAdFunds';
 
 function readAdvertisements() {
   return readDataFile<any>('advertisements.json', { bannerAds: [], adSenseConfig: {} });
@@ -7,20 +13,8 @@ function readAdvertisements() {
 function writeAdvertisements(data: any) {
   return writeDataFile('advertisements.json', data);
 }
-
-function readWallets() {
-  return readDataFile<any[]>('vendor-credit-wallets.json', []);
-}
 function readClickEvents() {
   return readDataFile<any[]>('advertisement-click-events.json', []);
-}
-
-function dayKey(input: string | Date) {
-  const d = new Date(input);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
 }
 
 export async function GET(request: NextRequest) {
@@ -29,9 +23,9 @@ export async function GET(request: NextRequest) {
     const position = searchParams.get('position');
     const limit = Math.max(1, Number(searchParams.get('limit') || 5));
 
-    const [advertisements, wallets, clickEvents] = await Promise.all([
+    const [advertisements, adFundsWallets, clickEvents] = await Promise.all([
       readAdvertisements(),
-      readWallets(),
+      readAdFundsWallets(),
       readClickEvents(),
     ]);
     const ads = (advertisements.bannerAds || []).filter((ad: any) => ad.status === 'active');
@@ -47,39 +41,20 @@ export async function GET(request: NextRequest) {
 
     const ranked = eligible
       .map((ad: any) => {
-        const wallet = wallets.find(
-          (w) =>
-            String(w.vendorUserId || '') === String(ad.vendorUserId || '') ||
-            String(w.vendorId || '') === String(ad.vendorId || '') ||
-            String(w.email || '').toLowerCase() === String(ad.advertiserEmail || '').toLowerCase(),
-        );
-        const credits = Number(wallet?.currentCredits || 0);
+        const adFunds = getAdFundsBalanceForAd(adFundsWallets, ad);
+        const canServe = canServeSponsoredAd(ad, adFunds, clickEvents, today);
         const bid = Number(ad.bidPerClick || ad.cost || 0);
-        const hasBidCoverage = bid > 0 && credits >= bid;
-
-        const maxDailyBudget = Number(ad.maxDailyBudget || 0);
-        let budgetAvailable = true;
-        if (maxDailyBudget > 0) {
-          const dailySpent = clickEvents
-            .filter((ev: any) => ev.adId === ad.id && dayKey(ev.timestamp) === today)
-            .reduce((sum: number, ev: any) => sum + Number(ev.charge || 0), 0);
-          budgetAvailable = dailySpent + bid <= maxDailyBudget;
-        }
-
         return {
           ...ad,
-          availableCredits: credits,
-          canServePaidClick: hasBidCoverage && budgetAvailable,
+          availableAdFunds: adFunds,
+          availableCredits: adFunds,
+          canServePaidClick: canServe,
         };
       })
+      .filter((ad: any) => ad.canServePaidClick)
       .sort((a: any, b: any) => {
-        // Funded ads rank first; depleted/budget-capped ads fall below.
-        const fundedDelta = Number(b.canServePaidClick) - Number(a.canServePaidClick);
-        if (fundedDelta !== 0) return fundedDelta;
-        // Within each group, higher ad-account balance gets higher rank.
-        const balanceDelta = Number(b.availableCredits || 0) - Number(a.availableCredits || 0);
+        const balanceDelta = Number(b.availableAdFunds || 0) - Number(a.availableAdFunds || 0);
         if (balanceDelta !== 0) return balanceDelta;
-        // Tie-breaker: higher bid then CTR.
         const bidDelta = Number(b.bidPerClick || b.cost || 0) - Number(a.bidPerClick || a.cost || 0);
         if (bidDelta !== 0) return bidDelta;
         return Number(b.ctr || 0) - Number(a.ctr || 0);

@@ -3,6 +3,7 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState } from 'react';
+import { readFirstLoginFlag } from '@/lib/authFirstLogin';
 
 interface User {
     id: number;
@@ -10,6 +11,8 @@ interface User {
     firstName: string;
     lastName: string;
     role: 'USER' | 'ADMIN' | 'VENDOR';
+    /** Set from auth API / JWT when the backend marks this session as a first sign-in. */
+    isFirstLogin?: boolean;
 }
 
 interface AuthContextType {
@@ -90,8 +93,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.message || 'Login failed');
-        setUser(data.user);
-        return data.user;
+        const envelope = data as Record<string, unknown>;
+        const raw = envelope.user as Record<string, unknown> | undefined;
+        if (!raw) throw new Error(data.message || 'Login failed');
+        const firstLogin = readFirstLoginFlag(raw, envelope);
+        const user: User = {
+            ...(raw as unknown as User),
+            ...(firstLogin ? { isFirstLogin: true } : {}),
+        };
+        setUser(user);
+        return user;
     };
 
     const register = async (payload: {
@@ -109,8 +120,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.message || 'Registration failed');
-        setUser(data.user);
-        return data.user;
+        const envelope = data as Record<string, unknown>;
+        const raw = envelope.user as Record<string, unknown> | undefined;
+        if (!raw) throw new Error(data.message || 'Registration failed');
+        const firstLogin = readFirstLoginFlag(raw, envelope);
+        const user: User = {
+            ...(raw as unknown as User),
+            ...(firstLogin ? { isFirstLogin: true } : {}),
+        };
+        setUser(user);
+        return user;
     };
 
     const logout = async (): Promise<void> => {

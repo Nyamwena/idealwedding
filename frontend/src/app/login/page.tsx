@@ -2,14 +2,26 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 
+function safeInternalRedirect(raw: string | null): string | null {
+    if (!raw || !raw.startsWith('/') || raw.startsWith('//')) return null;
+    return raw;
+}
+
+function redirectAllowedForRole(role: string, path: string): boolean {
+    if (path.startsWith('/vendor')) return role === 'VENDOR';
+    if (path.startsWith('/admin')) return role === 'ADMIN';
+    return role === 'USER' || role === 'VENDOR' || role === 'ADMIN';
+}
+
 export default function LoginPage() {
     const { login } = useAuth();
     const router = useRouter();
+    const searchParams = useSearchParams();
 
     const [mounted, setMounted] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
@@ -86,13 +98,24 @@ export default function LoginPage() {
                 );
             }
 
+            const next = safeInternalRedirect(searchParams.get('redirect'));
+            if (next && redirectAllowedForRole(user.role, next)) {
+                const firstCouple =
+                    user.role !== 'ADMIN' &&
+                    user.role !== 'VENDOR' &&
+                    user.isFirstLogin &&
+                    (next === '/dashboard' || next.startsWith('/dashboard?'));
+                router.push(firstCouple ? '/dashboard?firstLogin=1' : next);
+                return;
+            }
             // Role-based redirect
             if (user.role === 'ADMIN') {
                 router.push('/admin');
             } else if (user.role === 'VENDOR') {
                 router.push('/vendor');
             } else {
-                router.push('/dashboard');
+                const firstQ = user.isFirstLogin ? '?firstLogin=1' : '';
+                router.push(`/dashboard${firstQ}`);
             }
         } catch (err: any) {
             if (

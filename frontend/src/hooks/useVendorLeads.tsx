@@ -55,7 +55,7 @@ export function useVendorLeads() {
   const fetchLeads = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/vendor/leads');
+      const response = await fetch('/api/vendor/leads', { credentials: 'include' });
       const result = await response.json();
       
       if (!response.ok) {
@@ -95,6 +95,7 @@ export function useVendorLeads() {
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
         body: JSON.stringify({
           leadId,
           status: newStatus,
@@ -160,6 +161,7 @@ export function useVendorLeads() {
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
         body: JSON.stringify(newLeadPayload),
       });
       const result = await response.json();

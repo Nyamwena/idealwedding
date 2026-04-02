@@ -1,9 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useAuth } from '@/hooks/useAuth';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 import { AdminBreadcrumb } from '@/components/admin/AdminBreadcrumb';
@@ -27,8 +25,6 @@ interface VendorQuote {
 }
 
 export default function VendorQuotesPage() {
-  const { user,  isVendor } = useAuth();
-  const router = useRouter();
   const [quotes, setQuotes] = useState<VendorQuote[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
@@ -51,79 +47,32 @@ export default function VendorQuotesPage() {
   const fetchQuotes = async () => {
     setLoading(true);
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Mock quotes data
-      const mockQuotes: VendorQuote[] = [
-        {
-          id: 'quote_001',
-          leadId: 'lead_001',
-          coupleName: 'Sarah & John',
-          coupleEmail: 'sarah.john@email.com',
-          serviceType: 'Wedding Photography',
-          eventDate: '2024-12-15',
-          location: 'New York, NY',
-          status: 'sent',
-          amount: 2500,
-          description: 'Full day wedding photography package including ceremony and reception coverage, edited photos delivered within 4 weeks.',
-          notes: 'Outdoor ceremony, indoor reception. Special request for sunset photos.',
-          createdAt: '2024-09-20T10:30:00Z',
-          sentAt: '2024-09-20T14:20:00Z',
-          expiresAt: '2024-09-27T14:20:00Z',
-        },
-        {
-          id: 'quote_002',
-          leadId: 'lead_002',
-          coupleName: 'Emily & Michael',
-          coupleEmail: 'emily.michael@email.com',
-          serviceType: 'Wedding Planning',
-          eventDate: '2025-03-20',
-          location: 'Los Angeles, CA',
-          status: 'draft',
-          amount: 5000,
-          description: 'Full-service wedding planning package including venue coordination, vendor management, and day-of coordination.',
-          notes: 'Full service planning package. Bride has specific vision for spring garden theme.',
-          createdAt: '2024-09-24T09:15:00Z',
-          expiresAt: '2024-10-01T09:15:00Z',
-        },
-        {
-          id: 'quote_003',
-          leadId: 'lead_003',
-          coupleName: 'Jessica & David',
-          coupleEmail: 'jessica.david@email.com',
-          serviceType: 'Catering Services',
-          eventDate: '2025-01-10',
-          location: 'Chicago, IL',
-          status: 'accepted',
-          amount: 3000,
-          description: 'Catering for 150 guests including appetizers, main course, dessert, and beverages.',
-          notes: '150 guests, mix of traditional and modern cuisine. Some dietary restrictions noted.',
-          createdAt: '2024-09-18T11:45:00Z',
-          sentAt: '2024-09-18T16:30:00Z',
-          expiresAt: '2024-09-25T16:30:00Z',
-        },
-        {
-          id: 'quote_004',
-          leadId: 'lead_004',
-          coupleName: 'Amanda & Robert',
-          coupleEmail: 'amanda.robert@email.com',
-          serviceType: 'Floral Arrangements',
-          eventDate: '2024-11-30',
-          location: 'Miami, FL',
-          status: 'rejected',
-          amount: 1800,
-          description: 'Beach wedding floral arrangements including bridal bouquet, centerpieces, and ceremony arch.',
-          notes: 'Beach wedding, tropical theme preferred. Budget constraints mentioned.',
-          createdAt: '2024-09-15T14:20:00Z',
-          sentAt: '2024-09-15T18:45:00Z',
-          expiresAt: '2024-09-22T18:45:00Z',
-        },
-      ];
-
-      setQuotes(mockQuotes);
+      const response = await fetch('/api/vendor/quotes', { credentials: 'include' });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to fetch quotes');
+      }
+      const rows = (result.data || []) as any[];
+      const normalized: VendorQuote[] = rows.map((q) => ({
+        id: String(q.id),
+        leadId: String(q.leadId || ''),
+        coupleName: String(q.coupleName || ''),
+        coupleEmail: String(q.coupleEmail || ''),
+        serviceType: String(q.serviceType || ''),
+        eventDate: String(q.eventDate || ''),
+        location: String(q.location || ''),
+        status: (q.status || 'draft') as VendorQuote['status'],
+        amount: Number(q.amount || 0),
+        description: String(q.description || ''),
+        notes: q.notes ? String(q.notes) : undefined,
+        createdAt: String(q.createdAt || new Date().toISOString()),
+        sentAt: q.sentAt ? String(q.sentAt) : undefined,
+        expiresAt: String(q.expiresAt || ''),
+      }));
+      setQuotes(normalized);
     } catch (error) {
       console.error('Failed to fetch quotes:', error);
+      setQuotes([]);
     } finally {
       setLoading(false);
     }
@@ -140,26 +89,44 @@ export default function VendorQuotesPage() {
 
   const handleCreateQuote = async () => {
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      const newQuoteData: VendorQuote = {
-        id: `quote_${Date.now()}`,
-        leadId: newQuote.leadId,
-        coupleName: 'New Couple',
-        coupleEmail: 'new.couple@email.com',
-        serviceType: 'Wedding Photography',
-        eventDate: '2025-06-15',
-        location: 'San Francisco, CA',
-        status: 'draft',
-        amount: parseInt(newQuote.amount),
-        description: newQuote.description,
-        notes: newQuote.notes,
-        createdAt: new Date().toISOString(),
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days
+      const amount = Number(newQuote.amount);
+      if (!newQuote.leadId || !newQuote.description || !Number.isFinite(amount) || amount <= 0) {
+        return;
+      }
+      const response = await fetch('/api/vendor/quotes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          leadId: newQuote.leadId,
+          amount,
+          description: newQuote.description,
+          notes: newQuote.notes || '',
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        console.error(result.error || 'Failed to create quote');
+        return;
+      }
+      const q = result.data;
+      const created: VendorQuote = {
+        id: String(q.id),
+        leadId: String(q.leadId || ''),
+        coupleName: String(q.coupleName || ''),
+        coupleEmail: String(q.coupleEmail || ''),
+        serviceType: String(q.serviceType || ''),
+        eventDate: String(q.eventDate || ''),
+        location: String(q.location || ''),
+        status: (q.status || 'draft') as VendorQuote['status'],
+        amount: Number(q.amount || 0),
+        description: String(q.description || ''),
+        notes: q.notes ? String(q.notes) : undefined,
+        createdAt: String(q.createdAt || new Date().toISOString()),
+        sentAt: q.sentAt ? String(q.sentAt) : undefined,
+        expiresAt: String(q.expiresAt || ''),
       };
-
-      setQuotes(prev => [newQuoteData, ...prev]);
+      setQuotes((prev) => [created, ...prev]);
       setShowCreateModal(false);
       setNewQuote({
         leadId: '',
@@ -194,11 +161,6 @@ export default function VendorQuotesPage() {
     }
   };
 
-
-
-  if (!isVendor) {
-    return null;
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-secondary-50">

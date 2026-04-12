@@ -34,9 +34,22 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
+/** Prevents session restore from hanging forever if auth API or upstream refresh never responds. */
+const AUTH_FETCH_TIMEOUT_MS = 12_000;
+
+async function fetchWithAuthTimeout(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), AUTH_FETCH_TIMEOUT_MS);
+    try {
+        return await fetch(input, { ...init, signal: ctrl.signal });
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
 async function fetchMe(): Promise<User | null> {
     try {
-        const res = await fetch('/api/auth/me', { credentials: 'include' });
+        const res = await fetchWithAuthTimeout('/api/auth/me', { credentials: 'include' });
         if (res.ok) return await res.json();
         return null;
     } catch {
@@ -46,7 +59,7 @@ async function fetchMe(): Promise<User | null> {
 
 async function tryRefresh(): Promise<boolean> {
     try {
-        const res = await fetch('/api/auth/refresh', {
+        const res = await fetchWithAuthTimeout('/api/auth/refresh', {
             method: 'POST',
             credentials: 'include',
         });

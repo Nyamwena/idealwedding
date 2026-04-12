@@ -1,6 +1,7 @@
 'use client';
 
 import { AuthProvider } from '@/hooks/useAuth';
+import { PlanningHydrationProvider } from '@/hooks/PlanningHydrationContext';
 
 export function Providers({
                               children,
@@ -9,7 +10,7 @@ export function Providers({
 }) {
     return (
         <AuthProvider>
-            {children}
+            <PlanningHydrationProvider>{children}</PlanningHydrationProvider>
         </AuthProvider>
     );
 }

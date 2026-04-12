@@ -101,30 +101,9 @@ export function useNotifications(): UseNotificationsReturn {
 
   // Load notifications and settings on mount
   useEffect(() => {
-    // #region debug useNotifications mount
-    fetch('http://127.0.0.1:7244/ingest/741aeb2a-0a99-488a-b940-070685fce534', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Debug-Session-Id': 'aea115',
-      },
-      body: JSON.stringify({
-        sessionId: 'aea115',
-        runId: 'debug_post_fix',
-        hypothesisId: 'A',
-        location: 'useNotifications.tsx:useEffect[mount]',
-        message: 'useNotifications mounted; loading notifications (user-scoped storage)',
-        data: {
-          userId: user?.id ?? null,
-          userRole: user?.role ?? null,
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion debug useNotifications mount
-
     if (!user) {
       setNotifications([]);
+      setIsLoading(false);
       return;
     }
 
@@ -146,27 +125,6 @@ export function useNotifications(): UseNotificationsReturn {
         setNotifications([]);
         return;
       }
-
-      // #region debug useNotifications load set
-      fetch('http://127.0.0.1:7244/ingest/741aeb2a-0a99-488a-b940-070685fce534', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Debug-Session-Id': 'aea115',
-        },
-        body: JSON.stringify({
-          sessionId: 'aea115',
-          runId: 'debug_post_fix',
-          hypothesisId: 'A',
-          location: 'useNotifications.tsx:loadNotifications[userStorage]',
-          message: 'Loading notifications from user-scoped localStorage',
-          data: {
-            userId: user?.id ?? null,
-            storageKey: userNotificationsKey,
-          },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
 
       // Load from user-scoped storage (if nothing exists, default to empty).
       const saved = localStorage.getItem(userNotificationsKey);
@@ -346,25 +304,6 @@ export function useNotifications(): UseNotificationsReturn {
 
       const notification = mockNotifications[randomType];
       if (notification) {
-        // #region debug useNotifications simulate
-        fetch('http://127.0.0.1:7244/ingest/741aeb2a-0a99-488a-b940-070685fce534', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Debug-Session-Id': 'aea115',
-          },
-          body: JSON.stringify({
-            sessionId: 'aea115',
-            runId: 'debug_before_fix',
-            hypothesisId: 'A',
-            location: 'useNotifications.tsx:simulateRealTimeNotifications',
-            message: 'Simulated notification added (client-side mock)',
-            data: { randomType },
-            timestamp: Date.now(),
-          }),
-        }).catch(() => {});
-        // #endregion debug useNotifications simulate
-
         addNotification({
           type: randomType,
           title: notification.title,

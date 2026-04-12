@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef } from 'react';
-import { useDocumentStorage, Document } from '@/hooks/useDocumentStorage';
+import { useDocumentStorage, Document, MAX_DOCUMENT_BYTES } from '@/hooks/useDocumentStorage';
 
 export function DocumentStorage() {
   const {
@@ -50,9 +50,8 @@ export function DocumentStorage() {
 
     const file = files[0];
     
-    // Validate file size (max 10MB)
-    if (file.size > 10 * 1024 * 1024) {
-      alert('File size must be less than 10MB');
+    if (file.size > MAX_DOCUMENT_BYTES) {
+      alert(`File size must be ${MAX_DOCUMENT_BYTES / (1024 * 1024)} MB or less (browser storage limit).`);
       return;
     }
 
@@ -395,16 +394,21 @@ export function DocumentStorage() {
               const type = documentTypes.find(t => t.value === document.type);
               
               return (
-                <div key={document.id} className="border border-gray-200 rounded-xl p-4 hover:shadow-lg transition-shadow">
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex items-center space-x-2">
-                      <div className="text-2xl">{type?.icon}</div>
-                      <div className="flex-1 min-w-0">
-                        <h4 className="font-semibold text-gray-900 truncate">{document.originalName}</h4>
+                <div key={document.id} className="min-w-0 border border-gray-200 rounded-xl p-4 hover:shadow-lg transition-shadow">
+                  <div className="flex items-start justify-between gap-3 mb-3">
+                    <div className="flex min-w-0 flex-1 items-start gap-2">
+                      <div className="shrink-0 text-2xl leading-none pt-0.5">{type?.icon}</div>
+                      <div className="min-w-0 flex-1">
+                        <h4
+                          className="font-semibold text-gray-900 break-words [overflow-wrap:anywhere] line-clamp-2 leading-snug"
+                          title={document.originalName}
+                        >
+                          {document.originalName}
+                        </h4>
                         <p className="text-sm text-gray-600">{formatFileSize(document.fileSize)}</p>
                       </div>
                     </div>
-                    <div className="flex space-x-1">
+                    <div className="flex shrink-0 flex-wrap justify-end gap-1">
                       <button
                         onClick={() => handleEditDocument(document)}
                         className="btn-outline btn-xs"

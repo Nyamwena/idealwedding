@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
+import { usePlanningHydration } from '@/hooks/PlanningHydrationContext';
 import { loadUserJsonArray, saveUserJsonArray, PLANNING_PARTS } from '@/lib/userPlanningStorage';
 
 // Quote Generator Interfaces
@@ -74,6 +75,7 @@ interface UseQuoteGeneratorReturn {
 
 export function useQuoteGenerator(): UseQuoteGeneratorReturn {
   const { user } = useAuth();
+  const planningHydration = usePlanningHydration();
   const [isLoading, setIsLoading] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -91,7 +93,7 @@ export function useQuoteGenerator(): UseQuoteGeneratorReturn {
     }
     setQuoteRequests(loadUserJsonArray<QuoteRequest>(user.id, PLANNING_PARTS.quoteGenRequests));
     setQuoteResponses(loadUserJsonArray<QuoteResponse>(user.id, PLANNING_PARTS.quoteGenResponses));
-  }, [user]);
+  }, [user?.id, planningHydration]);
 
   // Mock vendor data for matching
   const mockVendors: VendorMatch[] = [

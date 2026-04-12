@@ -1,8 +1,16 @@
 // COPY TO: frontend/src/app/api/auth/refresh/route.ts
 
 import { NextRequest, NextResponse } from 'next/server';
+import { fetchWithTimeout } from '@/lib/fetchWithTimeout';
 
 const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'https://api-auth.idealweddings.space';
+
+/** Avoids the route handler hanging if the auth service never responds (matches client-side auth timeout). */
+const UPSTREAM_REFRESH_TIMEOUT_MS = 12_000;
+
+function isAbortError(error: unknown): boolean {
+    return error instanceof Error && error.name === 'AbortError';
+}
 
 export async function POST(request: NextRequest) {
     try {
@@ -12,11 +20,27 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ message: 'No refresh token found' }, { status: 401 });
         }
 
-        const response = await fetch(`${AUTH_SERVICE_URL}/api/v1/auth/refresh`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ refreshToken }),
-        });
+        let response: Response;
+        try {
+            response = await fetchWithTimeout(
+                `${AUTH_SERVICE_URL}/api/v1/auth/refresh`,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ refreshToken }),
+                },
+                UPSTREAM_REFRESH_TIMEOUT_MS,
+            );
+        } catch (error) {
+            if (isAbortError(error)) {
+                console.error('[Refresh Route Error] Upstream timeout');
+                return NextResponse.json(
+                    { message: 'Authentication service did not respond in time' },
+                    { status: 504 },
+                );
+            }
+            throw error;
+        }
 
         const json = await response.json();
 

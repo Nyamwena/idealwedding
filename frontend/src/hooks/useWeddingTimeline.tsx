@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/hooks/useAuth';
+import { usePlanningHydration } from '@/hooks/PlanningHydrationContext';
 import {
   loadUserJsonArray,
   saveUserJsonArray,
@@ -65,6 +66,7 @@ interface UseWeddingTimelineReturn {
 
 export function useWeddingTimeline(): UseWeddingTimelineReturn {
   const { user } = useAuth();
+  const planningHydration = usePlanningHydration();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [tasks, setTasks] = useState<TimelineTask[]>([]);
@@ -104,7 +106,7 @@ export function useWeddingTimeline(): UseWeddingTimelineReturn {
     } finally {
       setIsLoading(false);
     }
-  }, [user?.id]);
+  }, [user?.id, planningHydration]);
 
   const addTask = async (task: Omit<TimelineTask, 'id' | 'createdAt'>) => {
     if (!user) return;

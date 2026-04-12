@@ -1,6 +1,7 @@
 // COPY TO: frontend/src/app/api/auth/login/route.ts
 
 import { NextRequest, NextResponse } from 'next/server';
+import { fetchWithTimeout } from '@/lib/fetchWithTimeout';
 
 const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'https://api-auth.idealweddings.space';
 
@@ -16,7 +17,7 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const response = await fetch(`${AUTH_SERVICE_URL}/api/v1/auth/login`, {
+        const response = await fetchWithTimeout(`${AUTH_SERVICE_URL}/api/v1/auth/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email, password }),

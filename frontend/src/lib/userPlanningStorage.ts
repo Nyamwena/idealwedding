@@ -1,6 +1,15 @@
 /**
- * Per-user wedding planning data in localStorage (until a real API backs it).
+ * Per-user wedding planning data: primary copy in localStorage for speed,
+ * with optional background sync to `/api/user/planning-storage` so the same
+ * account can load this data in another browser or Incognito window.
  */
+
+function scheduleServerSync(userId: string | number): void {
+  if (typeof window === 'undefined') return;
+  void import('@/lib/planningRemoteSync')
+    .then((m) => m.schedulePushPlanning(userId))
+    .catch(() => {});
+}
 
 export function userPlanningKey(userId: string | number, part: string): string {
   return `idealweddings_${part}_${userId}`;
@@ -21,6 +30,7 @@ export function loadUserJsonArray<T>(userId: string | number, part: string): T[]
 export function saveUserJsonArray<T>(userId: string | number, part: string, data: T[]): void {
   try {
     localStorage.setItem(userPlanningKey(userId, part), JSON.stringify(data));
+    scheduleServerSync(userId);
   } catch {
     /* quota / private mode */
   }
@@ -40,6 +50,7 @@ export function loadUserJsonObject<T>(userId: string | number, part: string): T 
 export function saveUserJsonObject<T>(userId: string | number, part: string, data: T): void {
   try {
     localStorage.setItem(userPlanningKey(userId, part), JSON.stringify(data));
+    scheduleServerSync(userId);
   } catch {
     /* ignore */
   }
@@ -55,4 +66,7 @@ export const PLANNING_PARTS = {
   quoteGenRequests: 'quote_generator_requests',
   quoteGenResponses: 'quote_generator_responses',
   timelineTasks: 'timeline_tasks',
+  /** User document metadata + data URLs (client-only storage) */
+  userDocuments: 'user_documents',
+  seatingChart: 'seating_chart',
 } as const;

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from './useAuth';
+import { usePlanningHydration } from './PlanningHydrationContext';
 import {
   loadUserJsonArray,
   loadUserJsonObject,
@@ -14,6 +15,11 @@ import {
 export interface WeddingDetails {
   id: string;
   weddingDate?: string;
+  /** Local ceremony time `HH:mm` (24h from time input); optional — countdown defaults to 16:00 if omitted */
+  ceremonyTime?: string;
+  /** First names (or preferred names) for personalized dashboard copy */
+  brideName?: string;
+  groomName?: string;
   venue?: string;
   guestCount?: number;
   budget?: number;
@@ -102,6 +108,7 @@ interface UseUserDataReturn {
 
 export function useUserData(): UseUserDataReturn {
   const { user } = useAuth();
+  const planningHydration = usePlanningHydration();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
@@ -120,10 +127,11 @@ export function useUserData(): UseUserDataReturn {
       setSelectedVendors([]);
       setGuests([]);
       setQuoteRequests([]);
+      setIsLoading(false);
       return;
     }
     loadUserData();
-  }, [user?.id]);
+  }, [user?.id, planningHydration]);
 
   const loadUserData = async () => {
     if (!user) return;

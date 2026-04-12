@@ -19,6 +19,15 @@ import { NotificationCenter } from '@/components/user/NotificationCenter';
 import { DocumentStorage } from '@/components/user/DocumentStorage';
 import { SeatingChartPlanner } from '@/components/user/SeatingChartPlanner';
 
+function coupleFirstNames(wd: { brideName?: string; groomName?: string } | null | undefined): string | null {
+  const b = wd?.brideName?.trim();
+  const g = wd?.groomName?.trim();
+  if (b && g) return `${b} & ${g}`;
+  if (b) return b;
+  if (g) return g;
+  return null;
+}
+
 export default function DashboardPage() {
   const { user,  logout } = useAuth();
   const router = useRouter();
@@ -43,6 +52,7 @@ export default function DashboardPage() {
   // User data hooks
   const userData = useUserData();
   const quoteGenerator = useQuoteGenerator();
+  const coupleLabel = coupleFirstNames(userData.weddingDetails);
 
 
 
@@ -86,18 +96,33 @@ export default function DashboardPage() {
       <main className="container-modern py-8">
         {/* Welcome Section */}
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-4">
+          <h1 className="text-4xl font-bold text-gray-900 mb-4 font-serif">
             {welcomeTone === 'registered'
-              ? 'Thank you for registering!'
+              ? coupleLabel
+                ? `Thank you for registering, ${coupleLabel}!`
+                : 'Thank you for registering!'
               : welcomeTone === 'firstLogin'
-                ? 'Welcome! Thank you for joining us.'
-                : 'Welcome back,'}
+                ? coupleLabel
+                  ? `Welcome, ${coupleLabel}!`
+                  : 'Welcome! Thank you for joining us.'
+                : coupleLabel
+                  ? `Welcome, ${coupleLabel}!`
+                  : 'Welcome back!'}
           </h1>
           <p className="text-xl text-gray-600 max-w-2xl mx-auto">
             {welcomeTone === 'registered' || welcomeTone === 'firstLogin'
-              ? "We're glad you're here. Use the tools below to start planning your perfect wedding."
-              : 'Plan your perfect wedding with our comprehensive tools and vendor network.'}
+              ? coupleLabel
+                ? "We're glad you're here. Add your wedding details below anytime to make this space even more yours."
+                : "We're glad you're here. Use the tools below to start planning your perfect wedding."
+              : coupleLabel
+                ? 'Your wedding hub—plan together with the tools and vendors below.'
+                : 'Plan your perfect wedding with our comprehensive tools and vendor network.'}
           </p>
+          {!coupleLabel && (
+            <p className="mt-3 text-sm text-primary-700 max-w-xl mx-auto">
+              Tip: open <span className="font-semibold">Overview → Wedding details</span> and add bride &amp; groom names for a personalized greeting.
+            </p>
+          )}
         </div>
 
         {/* Navigation Tabs */}

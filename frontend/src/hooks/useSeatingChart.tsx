@@ -1,8 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useAuth } from '@/hooks/useAuth';
+import { usePlanningHydration } from '@/hooks/PlanningHydrationContext';
+import type { Guest as UserGuest } from '@/hooks/useUserData';
+import { useUserData } from '@/hooks/useUserData';
+import { loadUserJsonObject, saveUserJsonObject, PLANNING_PARTS } from '@/lib/userPlanningStorage';
 
-// Seating Chart Interfaces
 export interface Guest {
   id: string;
   name: string;
@@ -42,30 +46,26 @@ export interface SeatingChart {
 }
 
 interface UseSeatingChartReturn {
-  // Seating Chart
   seatingChart: SeatingChart | null;
   createSeatingChart: (name: string, venue: string) => Promise<void>;
   updateSeatingChart: (updates: Partial<SeatingChart>) => Promise<void>;
-  
-  // Tables
   addTable: (table: Omit<Table, 'id' | 'guests'>) => Promise<void>;
   updateTable: (tableId: string, updates: Partial<Table>) => Promise<void>;
   deleteTable: (tableId: string) => Promise<void>;
   moveTable: (tableId: string, x: number, y: number) => Promise<void>;
   duplicateTable: (tableId: string) => Promise<void>;
   renameTable: (tableId: string, newName: string) => Promise<void>;
-  
-  // Guests
   assignGuestToTable: (guestId: string, tableId: string, seatNumber?: number) => Promise<void>;
   unassignGuestFromTable: (guestId: string) => Promise<void>;
-  moveGuestBetweenTables: (guestId: string, fromTableId: string, toTableId: string, seatNumber?: number) => Promise<void>;
-  
-  // Guest Management
+  moveGuestBetweenTables: (
+    guestId: string,
+    fromTableId: string,
+    toTableId: string,
+    seatNumber?: number,
+  ) => Promise<void>;
   availableGuests: Guest[];
   getGuestsByTable: (tableId: string) => Guest[];
   getUnassignedGuests: () => Guest[];
-  
-  // Analytics
   getSeatingStatistics: () => {
     totalGuests: number;
     assignedGuests: number;
@@ -74,438 +74,392 @@ interface UseSeatingChartReturn {
     averageGuestsPerTable: number;
     tableUtilization: { [tableId: string]: number };
   };
-  
-  // Export
   exportSeatingChart: () => void;
-  
-  // Loading and Error States
   isLoading: boolean;
   error: string | null;
 }
 
+function mapUserGuestToSeating(g: UserGuest): Guest {
+  return {
+    id: g.id,
+    name: g.name,
+    email: g.email,
+    phone: g.phone,
+    relationship: g.relationship,
+    rsvpStatus: g.rsvpStatus,
+    dietaryNeeds: g.dietaryNeeds,
+    plusOne: g.plusOne,
+    plusOneName: g.plusOneName,
+    tableId: undefined,
+    seatNumber: undefined,
+  };
+}
+
+function mergeUserGuestWithChart(ug: UserGuest, chart: SeatingChart | null): Guest {
+  const base = mapUserGuestToSeating(ug);
+  if (!chart) return base;
+  for (const t of chart.tables) {
+    const onTable = t.guests.find((g) => g.id === ug.id);
+    if (onTable) {
+      return {
+        ...base,
+        ...onTable,
+        tableId: t.id,
+        name: ug.name,
+        email: ug.email ?? onTable.email,
+        phone: ug.phone ?? onTable.phone,
+        relationship: ug.relationship,
+        rsvpStatus: ug.rsvpStatus,
+        dietaryNeeds: ug.dietaryNeeds ?? onTable.dietaryNeeds,
+        plusOne: ug.plusOne,
+        plusOneName: ug.plusOneName ?? onTable.plusOneName,
+      };
+    }
+  }
+  return base;
+}
+
+function normalizeChart(chart: SeatingChart): SeatingChart {
+  return { ...chart, totalTables: chart.tables.length };
+}
+
+function isValidLoadedChart(raw: unknown): raw is SeatingChart {
+  return Boolean(raw && typeof raw === 'object' && Array.isArray((raw as SeatingChart).tables));
+}
+
+function deferSetError(set: (msg: string | null) => void, msg: string | null) {
+  queueMicrotask(() => set(msg));
+}
+
 export function useSeatingChart(): UseSeatingChartReturn {
+  const { user } = useAuth();
+  const planningHydration = usePlanningHydration();
+  const { guests: userGuests } = useUserData();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [seatingChart, setSeatingChart] = useState<SeatingChart | null>(null);
-  const [availableGuests, setAvailableGuests] = useState<Guest[]>([]);
 
-  // Load seating chart and guests on mount
-  useEffect(() => {
-    loadSeatingChart();
-    loadAvailableGuests();
+  const persistChart = useCallback((uid: string, next: SeatingChart) => {
+    try {
+      saveUserJsonObject(uid, PLANNING_PARTS.seatingChart, normalizeChart(next));
+    } catch {
+      deferSetError(setError, 'Could not save seating chart (storage may be full).');
+    }
   }, []);
 
-  const loadSeatingChart = async () => {
+  useEffect(() => {
+    if (!user) {
+      setSeatingChart(null);
+      setIsLoading(false);
+      return;
+    }
+    const uid = String(user.id);
     setIsLoading(true);
     setError(null);
-    
     try {
-      // Simulate API call with mock data
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Mock seating chart
-      const mockSeatingChart: SeatingChart = {
-        id: '1',
-        name: 'Wedding Reception Seating',
-        venue: 'Garden Venue',
-        totalGuests: 150,
-        totalTables: 15,
-        tables: [
-          {
-            id: 'table1',
-            name: 'Head Table',
-            capacity: 8,
-            x: 100,
-            y: 50,
-            shape: 'rectangle',
-            guests: [],
-            specialNotes: 'Bridal party and immediate family'
-          },
-          {
-            id: 'table2',
-            name: 'Table 1',
-            capacity: 10,
-            x: 200,
-            y: 150,
-            shape: 'round',
-            guests: []
-          },
-          {
-            id: 'table3',
-            name: 'Table 2',
-            capacity: 10,
-            x: 350,
-            y: 150,
-            shape: 'round',
-            guests: []
-          },
-          {
-            id: 'table4',
-            name: 'Table 3',
-            capacity: 10,
-            x: 500,
-            y: 150,
-            shape: 'round',
-            guests: []
-          }
-        ],
-        createdAt: '2024-01-15T10:00:00Z',
-        lastModified: '2024-01-15T10:00:00Z',
-        notes: 'Wedding reception seating arrangement'
-      };
-      
-      setSeatingChart(mockSeatingChart);
-      
-    } catch (err) {
-      setError('Failed to load seating chart');
-      console.error('Error loading seating chart:', err);
+      const raw = loadUserJsonObject<SeatingChart>(uid, PLANNING_PARTS.seatingChart);
+      if (raw && isValidLoadedChart(raw)) {
+        setSeatingChart(normalizeChart(raw));
+      } else {
+        setSeatingChart(null);
+      }
+    } catch (e) {
+      console.error(e);
+      setSeatingChart(null);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [user?.id, planningHydration]);
 
-  const loadAvailableGuests = async () => {
-    try {
-      // Mock guest data
-      const mockGuests: Guest[] = [
-        {
-          id: 'guest1',
-          name: 'John Smith',
-          email: 'john@example.com',
-          relationship: 'Groom\'s Father',
-          rsvpStatus: 'attending',
-          dietaryNeeds: 'Vegetarian',
-          plusOne: false,
-          specialRequirements: 'Wheelchair accessible'
-        },
-        {
-          id: 'guest2',
-          name: 'Sarah Johnson',
-          email: 'sarah@example.com',
-          relationship: 'Bride\'s Sister',
-          rsvpStatus: 'attending',
-          dietaryNeeds: 'Gluten-free',
-          plusOne: true,
-          plusOneName: 'Mike Johnson'
-        },
-        {
-          id: 'guest3',
-          name: 'David Wilson',
-          email: 'david@example.com',
-          relationship: 'Friend',
-          rsvpStatus: 'attending',
-          plusOne: false
-        },
-        {
-          id: 'guest4',
-          name: 'Emily Brown',
-          email: 'emily@example.com',
-          relationship: 'Bride\'s Cousin',
-          rsvpStatus: 'attending',
-          dietaryNeeds: 'Vegan',
-          plusOne: false
-        },
-        {
-          id: 'guest5',
-          name: 'Michael Davis',
-          email: 'michael@example.com',
-          relationship: 'Groom\'s Best Friend',
-          rsvpStatus: 'attending',
-          plusOne: true,
-          plusOneName: 'Lisa Davis'
-        }
-      ];
-      
-      setAvailableGuests(mockGuests);
-      
-    } catch (err) {
-      console.error('Error loading guests:', err);
-    }
-  };
+  const availableGuests = useMemo((): Guest[] => {
+    return userGuests.map((ug) => mergeUserGuestWithChart(ug, seatingChart));
+  }, [userGuests, seatingChart]);
 
-  // Seating Chart Management
   const createSeatingChart = async (name: string, venue: string) => {
+    if (!user) return;
+    const uid = String(user.id);
     setIsLoading(true);
+    setError(null);
     try {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      const newSeatingChart: SeatingChart = {
-        id: Date.now().toString(),
+      const attending = userGuests.filter((g) => g.rsvpStatus === 'attending').length;
+      const newSeatingChart: SeatingChart = normalizeChart({
+        id: `chart_${Date.now()}`,
         name,
         venue,
-        totalGuests: availableGuests.filter(g => g.rsvpStatus === 'attending').length,
+        totalGuests: attending,
         totalTables: 0,
         tables: [],
         createdAt: new Date().toISOString(),
-        lastModified: new Date().toISOString()
-      };
+        lastModified: new Date().toISOString(),
+      });
       setSeatingChart(newSeatingChart);
+      persistChart(uid, newSeatingChart);
     } catch (err) {
       setError('Failed to create seating chart');
+      console.error(err);
     } finally {
       setIsLoading(false);
     }
   };
 
   const updateSeatingChart = async (updates: Partial<SeatingChart>) => {
-    if (!seatingChart) return;
-    
+    if (!seatingChart || !user) return;
+    const uid = String(user.id);
     setIsLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      setSeatingChart(prev => prev ? {
-        ...prev,
+      const next = normalizeChart({
+        ...seatingChart,
         ...updates,
-        lastModified: new Date().toISOString()
-      } : null);
+        lastModified: new Date().toISOString(),
+      });
+      setSeatingChart(next);
+      persistChart(uid, next);
     } catch (err) {
       setError('Failed to update seating chart');
+      console.error(err);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Table Management
   const addTable = async (table: Omit<Table, 'id' | 'guests'>) => {
-    if (!seatingChart) return;
-    
+    if (!seatingChart || !user) return;
+    const uid = String(user.id);
     setIsLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 500));
       const newTable: Table = {
         ...table,
-        id: Date.now().toString(),
-        guests: []
+        id: `table_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        guests: [],
       };
-      setSeatingChart(prev => prev ? {
-        ...prev,
-        tables: [...prev.tables, newTable],
-        totalTables: prev.totalTables + 1,
-        lastModified: new Date().toISOString()
-      } : null);
+      const next = normalizeChart({
+        ...seatingChart,
+        tables: [...seatingChart.tables, newTable],
+        lastModified: new Date().toISOString(),
+      });
+      setSeatingChart(next);
+      persistChart(uid, next);
     } catch (err) {
       setError('Failed to add table');
+      console.error(err);
     } finally {
       setIsLoading(false);
     }
   };
 
   const updateTable = async (tableId: string, updates: Partial<Table>) => {
-    if (!seatingChart) return;
-    
+    if (!seatingChart || !user) return;
+    const uid = String(user.id);
     setIsLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      setSeatingChart(prev => prev ? {
-        ...prev,
-        tables: prev.tables.map(table => 
-          table.id === tableId ? { ...table, ...updates } : table
+      const next = normalizeChart({
+        ...seatingChart,
+        tables: seatingChart.tables.map((table) =>
+          table.id === tableId ? { ...table, ...updates } : table,
         ),
-        lastModified: new Date().toISOString()
-      } : null);
+        lastModified: new Date().toISOString(),
+      });
+      setSeatingChart(next);
+      persistChart(uid, next);
     } catch (err) {
       setError('Failed to update table');
+      console.error(err);
     } finally {
       setIsLoading(false);
     }
   };
 
   const deleteTable = async (tableId: string) => {
-    if (!seatingChart) return;
-    
+    if (!seatingChart || !user) return;
+    const uid = String(user.id);
     setIsLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // Unassign all guests from this table
-      const table = seatingChart.tables.find(t => t.id === tableId);
-      if (table) {
-        table.guests.forEach(guest => {
-          const guestIndex = availableGuests.findIndex(g => g.id === guest.id);
-          if (guestIndex !== -1) {
-            availableGuests[guestIndex].tableId = undefined;
-            availableGuests[guestIndex].seatNumber = undefined;
-          }
-        });
-      }
-      
-      setSeatingChart(prev => prev ? {
-        ...prev,
-        tables: prev.tables.filter(table => table.id !== tableId),
-        totalTables: prev.totalTables - 1,
-        lastModified: new Date().toISOString()
-      } : null);
+      const next = normalizeChart({
+        ...seatingChart,
+        tables: seatingChart.tables.filter((table) => table.id !== tableId),
+        lastModified: new Date().toISOString(),
+      });
+      setSeatingChart(next);
+      persistChart(uid, next);
     } catch (err) {
       setError('Failed to delete table');
+      console.error(err);
     } finally {
       setIsLoading(false);
     }
   };
 
   const duplicateTable = async (tableId: string) => {
-    if (!seatingChart) return;
-    
+    if (!seatingChart || !user) return;
+    const uid = String(user.id);
     setIsLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      const originalTable = seatingChart.tables.find(t => t.id === tableId);
+      const originalTable = seatingChart.tables.find((t) => t.id === tableId);
       if (!originalTable) return;
-      
       const newTable: Table = {
         ...originalTable,
-        id: Date.now().toString(),
+        id: `table_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
         name: `${originalTable.name} (Copy)`,
-        x: originalTable.x + 50, // Offset position slightly
+        x: originalTable.x + 50,
         y: originalTable.y + 50,
-        guests: [] // Don't duplicate guests
+        guests: [],
       };
-      
-      setSeatingChart(prev => prev ? {
-        ...prev,
-        tables: [...prev.tables, newTable],
-        totalTables: prev.totalTables + 1,
-        lastModified: new Date().toISOString()
-      } : null);
+      const next = normalizeChart({
+        ...seatingChart,
+        tables: [...seatingChart.tables, newTable],
+        lastModified: new Date().toISOString(),
+      });
+      setSeatingChart(next);
+      persistChart(uid, next);
     } catch (err) {
       setError('Failed to duplicate table');
+      console.error(err);
     } finally {
       setIsLoading(false);
     }
   };
 
   const renameTable = async (tableId: string, newName: string) => {
-    if (!seatingChart) return;
-    
-    setIsLoading(true);
-    try {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      await updateTable(tableId, { name: newName });
-    } catch (err) {
-      setError('Failed to rename table');
-    } finally {
-      setIsLoading(false);
-    }
+    await updateTable(tableId, { name: newName });
   };
 
   const moveTable = async (tableId: string, x: number, y: number) => {
-    if (!seatingChart) return;
-    
-    try {
-      // Check for collisions with other tables
-      const currentTable = seatingChart.tables.find(t => t.id === tableId);
-      if (!currentTable) return;
-      
-      const otherTables = seatingChart.tables.filter(t => t.id !== tableId);
-      const tableWidth = 120; // Approximate table width
-      const tableHeight = 80; // Approximate table height
-      
-      // Simple collision detection
-      const hasCollision = otherTables.some(table => {
-        const distance = Math.sqrt(Math.pow(x - table.x, 2) + Math.pow(y - table.y, 2));
-        return distance < Math.max(tableWidth, tableHeight) * 0.8; // 80% overlap threshold
+    if (!user) return;
+    const uid = String(user.id);
+    setSeatingChart((prev) => {
+      if (!prev) return null;
+      const next = normalizeChart({
+        ...prev,
+        tables: prev.tables.map((t) => (t.id === tableId ? { ...t, x, y } : t)),
+        lastModified: new Date().toISOString(),
       });
-      
-      if (hasCollision) {
-        // Allow slight overlap but warn user
-        console.log('Tables are overlapping - this is allowed for intentional stacking');
+      try {
+        saveUserJsonObject(uid, PLANNING_PARTS.seatingChart, next);
+      } catch {
+        deferSetError(setError, 'Could not save table position.');
+        return prev;
       }
-      
-      await updateTable(tableId, { x, y });
-    } catch (err) {
-      setError('Failed to move table');
-    }
+      deferSetError(setError, null);
+      return next;
+    });
   };
 
-  // Guest Management
   const assignGuestToTable = async (guestId: string, tableId: string, seatNumber?: number) => {
-    if (!seatingChart) return;
-    
-    setIsLoading(true);
-    try {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // Find guest and table
-      const guest = availableGuests.find(g => g.id === guestId);
-      const table = seatingChart.tables.find(t => t.id === tableId);
-      
-      if (!guest || !table) return;
-      
-      // Check if table has capacity
-      if (table.guests.length >= table.capacity) {
-        setError('Table is at full capacity');
-        return;
+    if (!user) return;
+    const uid = String(user.id);
+    const ug = userGuests.find((g) => g.id === guestId);
+    if (!ug) return;
+
+    setSeatingChart((prev) => {
+      if (!prev) return prev;
+      const target = prev.tables.find((t) => t.id === tableId);
+      if (!target) return prev;
+
+      const withoutGuest = prev.tables.map((t) => ({
+        ...t,
+        guests: t.guests.filter((g) => g.id !== guestId),
+      }));
+      const tgt = withoutGuest.find((t) => t.id === tableId);
+      if (!tgt) return prev;
+      if (tgt.guests.length >= tgt.capacity) {
+        deferSetError(setError, 'Table is at full capacity');
+        return prev;
       }
-      
-      // Unassign from previous table if assigned
-      if (guest.tableId) {
-        const previousTable = seatingChart.tables.find(t => t.id === guest.tableId);
-        if (previousTable) {
-          previousTable.guests = previousTable.guests.filter(g => g.id !== guestId);
-        }
-      }
-      
-      // Assign to new table
-      guest.tableId = tableId;
-      guest.seatNumber = seatNumber;
-      table.guests.push(guest);
-      
-      setSeatingChart(prev => prev ? {
+
+      const seatingGuest: Guest = { ...mapUserGuestToSeating(ug), tableId, seatNumber };
+      const nextTables = withoutGuest.map((t) =>
+        t.id === tableId ? { ...t, guests: [...t.guests, seatingGuest] } : t,
+      );
+      const next = normalizeChart({
         ...prev,
-        lastModified: new Date().toISOString()
-      } : null);
-      
-    } catch (err) {
-      setError('Failed to assign guest to table');
-    } finally {
-      setIsLoading(false);
-    }
+        tables: nextTables,
+        lastModified: new Date().toISOString(),
+      });
+      try {
+        saveUserJsonObject(uid, PLANNING_PARTS.seatingChart, next);
+      } catch {
+        deferSetError(setError, 'Could not save seating assignment.');
+        return prev;
+      }
+      deferSetError(setError, null);
+      return next;
+    });
   };
 
   const unassignGuestFromTable = async (guestId: string) => {
-    if (!seatingChart) return;
-    
-    setIsLoading(true);
-    try {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      const guest = availableGuests.find(g => g.id === guestId);
-      if (!guest || !guest.tableId) return;
-      
-      // Remove from table
-      const table = seatingChart.tables.find(t => t.id === guest.tableId);
-      if (table) {
-        table.guests = table.guests.filter(g => g.id !== guestId);
-      }
-      
-      // Clear guest assignment
-      guest.tableId = undefined;
-      guest.seatNumber = undefined;
-      
-      setSeatingChart(prev => prev ? {
+    if (!user) return;
+    const uid = String(user.id);
+    setSeatingChart((prev) => {
+      if (!prev) return prev;
+      const next = normalizeChart({
         ...prev,
-        lastModified: new Date().toISOString()
-      } : null);
-      
-    } catch (err) {
-      setError('Failed to unassign guest from table');
-    } finally {
-      setIsLoading(false);
-    }
+        tables: prev.tables.map((t) => ({
+          ...t,
+          guests: t.guests.filter((g) => g.id !== guestId),
+        })),
+        lastModified: new Date().toISOString(),
+      });
+      try {
+        saveUserJsonObject(uid, PLANNING_PARTS.seatingChart, next);
+      } catch {
+        deferSetError(setError, 'Could not save seating chart.');
+        return prev;
+      }
+      deferSetError(setError, null);
+      return next;
+    });
   };
 
-  const moveGuestBetweenTables = async (guestId: string, fromTableId: string, toTableId: string, seatNumber?: number) => {
-    await unassignGuestFromTable(guestId);
-    await assignGuestToTable(guestId, toTableId, seatNumber);
+  const moveGuestBetweenTables = async (
+    guestId: string,
+    _fromTableId: string,
+    toTableId: string,
+    seatNumber?: number,
+  ) => {
+    if (!user) return;
+    const uid = String(user.id);
+    const ug = userGuests.find((g) => g.id === guestId);
+    if (!ug) return;
+
+    setSeatingChart((prev) => {
+      if (!prev) return prev;
+      const withoutGuest = prev.tables.map((t) => ({
+        ...t,
+        guests: t.guests.filter((g) => g.id !== guestId),
+      }));
+      const tgt = withoutGuest.find((t) => t.id === toTableId);
+      if (!tgt) return prev;
+      if (tgt.guests.length >= tgt.capacity) {
+        deferSetError(setError, 'Table is at full capacity');
+        return prev;
+      }
+      const seatingGuest: Guest = { ...mapUserGuestToSeating(ug), tableId: toTableId, seatNumber };
+      const nextTables = withoutGuest.map((t) =>
+        t.id === toTableId ? { ...t, guests: [...t.guests, seatingGuest] } : t,
+      );
+      const next = normalizeChart({
+        ...prev,
+        tables: nextTables,
+        lastModified: new Date().toISOString(),
+      });
+      try {
+        saveUserJsonObject(uid, PLANNING_PARTS.seatingChart, next);
+      } catch {
+        deferSetError(setError, 'Could not save seating chart.');
+        return prev;
+      }
+      deferSetError(setError, null);
+      return next;
+    });
   };
 
-  // Helper Functions
   const getGuestsByTable = (tableId: string) => {
-    const table = seatingChart?.tables.find(t => t.id === tableId);
+    const table = seatingChart?.tables.find((t) => t.id === tableId);
     return table ? table.guests : [];
   };
 
   const getUnassignedGuests = () => {
-    return availableGuests.filter(guest => !guest.tableId && guest.rsvpStatus === 'attending');
+    return availableGuests.filter((guest) => !guest.tableId && guest.rsvpStatus === 'attending');
   };
 
   const getSeatingStatistics = () => {
@@ -516,85 +470,75 @@ export function useSeatingChart(): UseSeatingChartReturn {
         unassignedGuests: 0,
         totalTables: 0,
         averageGuestsPerTable: 0,
-        tableUtilization: {}
+        tableUtilization: {} as { [tableId: string]: number },
       };
     }
 
-    const attendingGuests = availableGuests.filter(g => g.rsvpStatus === 'attending');
-    const assignedGuests = attendingGuests.filter(g => g.tableId);
-    const unassignedGuests = attendingGuests.filter(g => !g.tableId);
-    
+    const attendingGuests = availableGuests.filter((g) => g.rsvpStatus === 'attending');
+    const assignedGuests = attendingGuests.filter((g) => g.tableId);
+    const unassignedGuests = attendingGuests.filter((g) => !g.tableId);
+    const totalTables = seatingChart.tables.length;
+
     const tableUtilization: { [tableId: string]: number } = {};
-    seatingChart.tables.forEach(table => {
-      tableUtilization[table.id] = (table.guests.length / table.capacity) * 100;
+    seatingChart.tables.forEach((table) => {
+      tableUtilization[table.id] = (table.guests.length / Math.max(table.capacity, 1)) * 100;
     });
 
     return {
       totalGuests: attendingGuests.length,
       assignedGuests: assignedGuests.length,
       unassignedGuests: unassignedGuests.length,
-      totalTables: seatingChart.totalTables,
-      averageGuestsPerTable: seatingChart.totalTables > 0 ? assignedGuests.length / seatingChart.totalTables : 0,
-      tableUtilization
+      totalTables,
+      averageGuestsPerTable: totalTables > 0 ? assignedGuests.length / totalTables : 0,
+      tableUtilization,
     };
   };
 
   const exportSeatingChart = () => {
     if (!seatingChart) return;
-    
-    // Create PDF export data
     const exportData = {
       chartName: seatingChart.name,
       venue: seatingChart.venue,
-      tables: seatingChart.tables.map(table => ({
+      exportedAt: new Date().toISOString(),
+      tables: seatingChart.tables.map((table) => ({
         name: table.name,
         capacity: table.capacity,
-        guests: table.guests.map(guest => ({
+        guests: table.guests.map((guest) => ({
           name: guest.name,
           plusOne: guest.plusOne ? ` + ${guest.plusOneName}` : '',
           dietaryNeeds: guest.dietaryNeeds || '',
-          specialRequirements: guest.specialRequirements || ''
-        }))
-      }))
+          specialRequirements: guest.specialRequirements || '',
+        })),
+      })),
     };
-    
-    // Simulate PDF generation
-    console.log('Exporting seating chart:', exportData);
-    alert('Seating chart exported successfully! (This would generate a PDF in a real implementation)');
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `seating-chart-${seatingChart.name.replace(/\s+/g, '-')}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   return {
-    // Seating Chart
     seatingChart,
     createSeatingChart,
     updateSeatingChart,
-    
-    // Tables
     addTable,
     updateTable,
     deleteTable,
     moveTable,
     duplicateTable,
     renameTable,
-    
-    // Guests
     assignGuestToTable,
     unassignGuestFromTable,
     moveGuestBetweenTables,
-    
-    // Guest Management
     availableGuests,
     getGuestsByTable,
     getUnassignedGuests,
-    
-    // Analytics
     getSeatingStatistics,
-    
-    // Export
     exportSeatingChart,
-    
-    // Loading and Error States
     isLoading,
-    error
+    error,
   };
 }

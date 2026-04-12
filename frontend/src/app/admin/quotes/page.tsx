@@ -169,9 +169,14 @@ export default function AdminQuotesPage() {
   };
 
   const filteredQuotes = quotes.filter(quote => {
-    const matchesSearch = quote.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         quote.vendorName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         quote.service.toLowerCase().includes(searchTerm.toLowerCase());
+    const st = searchTerm.toLowerCase();
+    const customerName = (quote.customerName ?? '').toString().toLowerCase();
+    const vendorName = (quote.vendorName ?? '').toString().toLowerCase();
+    const service = (quote.service ?? '').toString().toLowerCase();
+    const matchesSearch =
+      customerName.includes(st) ||
+      vendorName.includes(st) ||
+      service.includes(st);
     const matchesStatus = statusFilter === 'all' || quote.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
@@ -309,33 +314,38 @@ export default function AdminQuotesPage() {
                       <div className="flex items-center">
                         <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center mr-4">
                           <span className="text-primary-600 font-medium">
-                            {quote.customerName.split(' ').map(n => n[0]).join('')}
+                            {(String(quote.customerName ?? (quote as any).coupleName ?? 'Unknown Couple'))
+                              .split(' ')
+                              .map(n => n[0])
+                              .join('')}
                           </span>
                         </div>
                         <div>
                           <div className="text-sm font-medium text-gray-900">
-                            {quote.customerName}
+                            {String(quote.customerName ?? (quote as any).coupleName ?? 'Unknown Couple')}
                           </div>
-                          <div className="text-sm text-gray-500">{quote.customerEmail}</div>
+                          <div className="text-sm text-gray-500">
+                            {String(quote.customerEmail ?? (quote as any).coupleEmail ?? '')}
+                          </div>
                         </div>
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm font-medium text-gray-900">
-                        {quote.vendorName}
+                        {String(quote.vendorName ?? (quote as any).vendorId ?? '')}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
-                        <span className="text-lg mr-2">{getServiceIcon(quote.service)}</span>
+                        <span className="text-lg mr-2">{getServiceIcon(String(quote.service ?? (quote as any).serviceType ?? (quote as any).serviceCategory ?? 'Service'))}</span>
                         <span className="text-sm font-medium text-gray-900">
-                          {quote.service}
+                          {String(quote.service ?? (quote as any).serviceType ?? (quote as any).serviceCategory ?? 'Service')}
                         </span>
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm font-medium text-gray-900">
-                        ${quote.amount.toLocaleString()}
+                        ${Number(quote.amount ?? 0).toLocaleString()}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -344,7 +354,7 @@ export default function AdminQuotesPage() {
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {quote.requestDate}
+                      {String((quote as any).requestDate ?? (quote as any).createdAt ?? '')}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex space-x-2">
@@ -465,23 +475,29 @@ export default function AdminQuotesPage() {
             <div className="space-y-3">
               <div>
                 <label className="text-sm font-medium text-gray-700">Customer:</label>
-                <p className="text-sm text-gray-900">{selectedQuote.customerName}</p>
-                <p className="text-xs text-gray-500">{selectedQuote.customerEmail}</p>
+                <p className="text-sm text-gray-900">
+                  {String(selectedQuote.customerName ?? (selectedQuote as any).coupleName ?? 'Unknown Couple')}
+                </p>
+                <p className="text-xs text-gray-500">
+                  {String(selectedQuote.customerEmail ?? (selectedQuote as any).coupleEmail ?? '')}
+                </p>
               </div>
               
               <div>
                 <label className="text-sm font-medium text-gray-700">Vendor:</label>
-                <p className="text-sm text-gray-900">{selectedQuote.vendorName}</p>
+                <p className="text-sm text-gray-900">{String(selectedQuote.vendorName ?? (selectedQuote as any).vendorId ?? '')}</p>
               </div>
               
               <div>
                 <label className="text-sm font-medium text-gray-700">Service:</label>
-                <p className="text-sm text-gray-900">{selectedQuote.service}</p>
+                <p className="text-sm text-gray-900">
+                  {String(selectedQuote.service ?? (selectedQuote as any).serviceType ?? (selectedQuote as any).serviceCategory ?? 'Service')}
+                </p>
               </div>
               
               <div>
                 <label className="text-sm font-medium text-gray-700">Amount:</label>
-                <p className="text-sm text-gray-900">${selectedQuote.amount.toLocaleString()}</p>
+                <p className="text-sm text-gray-900">${Number(selectedQuote.amount ?? 0).toLocaleString()}</p>
               </div>
               
               <div>
@@ -493,7 +509,7 @@ export default function AdminQuotesPage() {
               
               <div>
                 <label className="text-sm font-medium text-gray-700">Request Date:</label>
-                <p className="text-sm text-gray-900">{selectedQuote.requestDate}</p>
+                <p className="text-sm text-gray-900">{String((selectedQuote as any).requestDate ?? (selectedQuote as any).createdAt ?? '')}</p>
               </div>
               
               {selectedQuote.responseDate && (

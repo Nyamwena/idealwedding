@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useUserData, BudgetItem, SelectedVendor, Guest } from '@/hooks/useUserData';
 import { useQuoteGenerator, QuoteRequest, QuoteResponse } from '@/hooks/useQuoteGenerator';
+import { WeddingCountdown } from '@/components/user/WeddingCountdown';
 
 interface UserDashboardWidgetsProps {
   userData: ReturnType<typeof useUserData>;
@@ -27,13 +28,28 @@ function formatOverviewDate(iso?: string): string {
   return Number.isNaN(d.getTime()) ? 'Not set' : d.toLocaleDateString();
 }
 
+function formatOverviewCeremonyTime(hm?: string): string {
+  if (!hm?.trim()) return '4:00 PM (default)';
+  const m = /^(\d{1,2}):(\d{2})$/.exec(hm.trim());
+  if (!m) return hm;
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  if (!Number.isFinite(h) || !Number.isFinite(min)) return hm;
+  const d = new Date();
+  d.setHours(h, min, 0, 0);
+  return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+}
+
 export function UserDashboardWidgets({ userData, quoteGenerator }: UserDashboardWidgetsProps) {
   const { weddingDetails, updateWeddingDetails, budgetItems, selectedVendors, guests } = userData;
   const { quoteRequests, quoteResponses } = quoteGenerator;
   const [topAds, setTopAds] = useState<RankedAd[]>([]);
   const [weddingFormOpen, setWeddingFormOpen] = useState(false);
   const [weddingForm, setWeddingForm] = useState({
+    brideName: '',
+    groomName: '',
     weddingDate: '',
+    ceremonyTime: '',
     venue: '',
     guestCount: '',
     theme: '',
@@ -58,9 +74,13 @@ export function UserDashboardWidgets({ userData, quoteGenerator }: UserDashboard
 
   useEffect(() => {
     const loadTopAds = async () => {
+      const ac = new AbortController();
+      const timer = window.setTimeout(() => ac.abort(), 8_000);
       try {
         // API already ranks by bidPerClick desc; client sort is a safety fallback.
-        const response = await fetch('/api/advertisements?position=top&limit=4');
+        const response = await fetch('/api/advertisements?position=top&limit=4', {
+          signal: ac.signal,
+        });
         const result = await response.json();
         if (!response.ok) {
           setTopAds([]);
@@ -74,6 +94,8 @@ export function UserDashboardWidgets({ userData, quoteGenerator }: UserDashboard
         setTopAds(ads);
       } catch {
         setTopAds([]);
+      } finally {
+        window.clearTimeout(timer);
       }
     };
     loadTopAds();
@@ -82,7 +104,10 @@ export function UserDashboardWidgets({ userData, quoteGenerator }: UserDashboard
   const openWeddingForm = () => {
     const wd = weddingDetails;
     setWeddingForm({
+      brideName: wd?.brideName ?? '',
+      groomName: wd?.groomName ?? '',
       weddingDate: wd?.weddingDate ? wd.weddingDate.slice(0, 10) : '',
+      ceremonyTime: wd?.ceremonyTime?.trim() ? wd.ceremonyTime.trim().slice(0, 5) : '',
       venue: wd?.venue ?? '',
       guestCount: wd?.guestCount !== undefined ? String(wd.guestCount) : '',
       theme: wd?.theme ?? '',
@@ -102,8 +127,12 @@ export function UserDashboardWidgets({ userData, quoteGenerator }: UserDashboard
         const n = parseInt(gc, 10);
         if (Number.isFinite(n) && n >= 0) guestCount = n;
       }
+      const ct = weddingForm.ceremonyTime.trim();
       await updateWeddingDetails({
+        brideName: weddingForm.brideName.trim() || undefined,
+        groomName: weddingForm.groomName.trim() || undefined,
         weddingDate: weddingForm.weddingDate.trim() || undefined,
+        ceremonyTime: ct || undefined,
         venue: weddingForm.venue.trim() || undefined,
         guestCount,
         theme: weddingForm.theme.trim() || undefined,
@@ -132,10 +161,29 @@ export function UserDashboardWidgets({ userData, quoteGenerator }: UserDashboard
 
   return (
     <div className="space-y-8">
+      <WeddingCountdown
+        weddingDate={weddingDetails?.weddingDate}
+        ceremonyTime={weddingDetails?.ceremonyTime}
+        theme={weddingDetails?.theme}
+        onSetDate={openWeddingForm}
+      />
+
       {/* Wedding Overview — values come from your saved details (browser storage per account) */}
       <div className="bg-white rounded-2xl shadow-lg p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
-          <h2 className="text-2xl font-bold text-gray-900">Wedding Overview</h2>
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">Wedding Overview</h2>
+            {(weddingDetails?.brideName?.trim() || weddingDetails?.groomName?.trim()) && (
+              <p className="mt-1 text-sm font-medium text-primary-700">
+                {[
+                  weddingDetails?.brideName?.trim(),
+                  weddingDetails?.groomName?.trim(),
+                ]
+                  .filter(Boolean)
+                  .join(' & ')}
+              </p>
+            )}
+          </div>
           <button
             type="button"
             onClick={openWeddingForm}
@@ -149,6 +197,9 @@ export function UserDashboardWidgets({ userData, quoteGenerator }: UserDashboard
             <div className="text-3xl mb-2">📅</div>
             <h3 className="font-semibold text-gray-900">Wedding Date</h3>
             <p className="text-gray-600">{formatOverviewDate(weddingDetails?.weddingDate)}</p>
+            <p className="mt-1 text-xs text-gray-500">
+              Ceremony · {formatOverviewCeremonyTime(weddingDetails?.ceremonyTime)}
+            </p>
           </div>
           <div className="text-center">
             <div className="text-3xl mb-2">🏛️</div>
@@ -189,9 +240,36 @@ export function UserDashboardWidgets({ userData, quoteGenerator }: UserDashboard
               Wedding details
             </h3>
             <p className="text-sm text-gray-600 mb-4">
-              These fields power your overview. Leave anything blank if you have not decided yet.
+              These fields power your overview and your personalized welcome. Leave anything blank if you have not decided yet.
             </p>
             <div className="space-y-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Bride&apos;s name</label>
+                  <input
+                    type="text"
+                    className="input w-full"
+                    placeholder="e.g. Susan"
+                    autoComplete="given-name"
+                    value={weddingForm.brideName}
+                    onChange={(e) => setWeddingForm((f) => ({ ...f, brideName: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Groom&apos;s name</label>
+                  <input
+                    type="text"
+                    className="input w-full"
+                    placeholder="e.g. John"
+                    autoComplete="given-name"
+                    value={weddingForm.groomName}
+                    onChange={(e) => setWeddingForm((f) => ({ ...f, groomName: e.target.value }))}
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-gray-500 -mt-2">
+                First names are enough—we use them for your dashboard greeting (e.g. Welcome, Susan &amp; John).
+              </p>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Wedding date</label>
                 <input
@@ -200,6 +278,18 @@ export function UserDashboardWidgets({ userData, quoteGenerator }: UserDashboard
                   value={weddingForm.weddingDate}
                   onChange={(e) => setWeddingForm((f) => ({ ...f, weddingDate: e.target.value }))}
                 />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Ceremony time</label>
+                <input
+                  type="time"
+                  className="input w-full"
+                  value={weddingForm.ceremonyTime}
+                  onChange={(e) => setWeddingForm((f) => ({ ...f, ceremonyTime: e.target.value }))}
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  Optional. The countdown targets this moment on your wedding date (defaults to 4:00 PM if left empty).
+                </p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Venue</label>

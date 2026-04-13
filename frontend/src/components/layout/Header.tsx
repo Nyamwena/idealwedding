@@ -225,7 +225,7 @@ export function Header() {
                             <Link href="/vendors" className="nav-link text-sm font-semibold leading-6">
                                 Vendors
                             </Link>
-                            <Link href="/vendor" className="nav-link text-sm font-semibold leading-6 text-orange-600 hover:text-orange-700">
+                            <Link href="/vendor" className="nav-link text-sm font-semibold leading-6">
                                 🏪 Vendor Account
                             </Link>
                             <Link href="/pricing" className="nav-link text-sm font-semibold leading-6">

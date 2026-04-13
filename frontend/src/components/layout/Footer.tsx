@@ -52,21 +52,21 @@ export function Footer() {
             </p>
             <div className="flex flex-wrap items-center gap-2">
               <a
-                href="#"
+                href="https://www.facebook.com/share/17xtayxYDc/"
                 className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-gray-400 transition-colors duration-300 hover:bg-white/10 hover:text-[#1877F2] hover-scale"
               >
                 <span className="sr-only">Facebook</span>
                 <Facebook className="h-6 w-6" strokeWidth={1.75} aria-hidden />
               </a>
               <a
-                href="#"
+                href="https://www.instagram.com/idealweddingszw?igsh=Y3hsZmx1bGl1em4x"
                 className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-gray-400 transition-colors duration-300 hover:bg-white/10 hover:text-[#E4405F] hover-scale"
               >
                 <span className="sr-only">Instagram</span>
                 <Instagram className="h-6 w-6" strokeWidth={1.75} aria-hidden />
               </a>
               <a
-                href="#"
+                href="https://x.com/IdealWeddingszw"
                 className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-gray-400 transition-colors duration-300 hover:bg-white/10 hover:text-white hover-scale"
               >
                 <span className="sr-only">X</span>

@@ -51,8 +51,13 @@ export async function POST(request: NextRequest) {
         }
 
         if (!response.ok) {
+            const baseMsg = pickAuthErrorMessage(json);
+            const hint404 =
+                response.status === 404
+                    ? ` Auth service URL in use: ${getAuthServiceBaseUrl()} — set AUTH_SERVICE_URL to the Nest auth origin (not the Next site), ensure auth-service is running and exposes POST /api/v1/auth/login.`
+                    : '';
             return NextResponse.json(
-                { message: pickAuthErrorMessage(json) },
+                { message: `${baseMsg}${hint404}` },
                 { status: response.status }
             );
         }

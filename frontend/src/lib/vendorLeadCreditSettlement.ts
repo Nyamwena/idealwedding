@@ -8,7 +8,10 @@ import { newVendorWalletBalanceFields } from '@/lib/vendorWalletStarter';
  * deduct credits once from the vendor wallet and write a transaction.
  * POST /api/vendor/leads already charges at creation — this covers legacy/imported rows.
  */
-export async function settleOutstandingLeadCredits(session: VendorSession): Promise<void> {
+export async function settleOutstandingLeadCredits(
+  session: VendorSession,
+  catalogVendor?: { id: string } | null,
+): Promise<void> {
   const data = await readDataFile<any[]>('vendor-leads.json', []);
   let anyLeadChanged = false;
 
@@ -33,7 +36,7 @@ export async function settleOutstandingLeadCredits(session: VendorSession): Prom
   let newTransactions: any[] = [];
 
   const nextLeads = data.map((lead) => {
-    if (!leadBelongsToVendor(lead, session)) return lead;
+    if (!leadBelongsToVendor(lead, session, catalogVendor)) return lead;
     if (lead.creditsSettled === true) return lead;
 
     const cost =

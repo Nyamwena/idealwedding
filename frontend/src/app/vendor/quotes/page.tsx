@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import toast from 'react-hot-toast';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 import { AdminBreadcrumb } from '@/components/admin/AdminBreadcrumb';
@@ -15,13 +16,20 @@ interface VendorQuote {
   serviceType: string;
   eventDate: string;
   location: string;
-  status: 'draft' | 'sent' | 'accepted' | 'rejected' | 'expired';
+  status:
+    | 'draft'
+    | 'sent'
+    | 'accepted'
+    | 'rejected'
+    | 'expired'
+    | 'requote_requested';
   amount: number;
   description: string;
   notes?: string;
   createdAt: string;
   sentAt?: string;
   expiresAt: string;
+  quoteRequestId?: string;
 }
 
 export default function VendorQuotesPage() {
@@ -37,8 +45,10 @@ export default function VendorQuotesPage() {
     description: '',
     notes: '',
   });
-
-
+  const [showReviseModal, setShowReviseModal] = useState(false);
+  const [reviseTarget, setReviseTarget] = useState<VendorQuote | null>(null);
+  const [reviseForm, setReviseForm] = useState({ amount: '', description: '', notes: '' });
+  const [reviseSubmitting, setReviseSubmitting] = useState(false);
 
   useEffect(() => {
     fetchQuotes();
@@ -68,6 +78,7 @@ export default function VendorQuotesPage() {
         createdAt: String(q.createdAt || new Date().toISOString()),
         sentAt: q.sentAt ? String(q.sentAt) : undefined,
         expiresAt: String(q.expiresAt || ''),
+        quoteRequestId: q.quoteRequestId ? String(q.quoteRequestId) : undefined,
       }));
       setQuotes(normalized);
     } catch (error) {
@@ -139,6 +150,95 @@ export default function VendorQuotesPage() {
     }
   };
 
+  const handleSendQuote = async (quote: VendorQuote) => {
+    try {
+      const action = quote.status === 'sent' ? 'resend' : 'send';
+      const response = await fetch(`/api/vendor/quotes/${encodeURIComponent(quote.id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ action }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result?.success) {
+        throw new Error(result?.error || 'Failed to send quote');
+      }
+      setQuotes((prev) =>
+        prev.map((row) =>
+          row.id === quote.id
+            ? {
+                ...row,
+                status: 'sent',
+                sentAt: String(result?.data?.sentAt || new Date().toISOString()),
+              }
+            : row,
+        ),
+      );
+    } catch (error) {
+      console.error('Failed to send quote:', error);
+    }
+  };
+
+  const openReviseModal = (quote: VendorQuote) => {
+    setReviseTarget(quote);
+    setReviseForm({
+      amount: String(quote.amount),
+      description: quote.description,
+      notes: quote.notes || '',
+    });
+    setShowReviseModal(true);
+  };
+
+  const submitReviseAndResend = async () => {
+    if (!reviseTarget) return;
+    const amount = Number(reviseForm.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast.error('Enter a valid amount');
+      return;
+    }
+    if (!reviseForm.description.trim()) {
+      toast.error('Description is required');
+      return;
+    }
+    setReviseSubmitting(true);
+    try {
+      const upRes = await fetch(`/api/vendor/quotes/${encodeURIComponent(reviseTarget.id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          action: 'update',
+          amount,
+          description: reviseForm.description.trim(),
+          notes: reviseForm.notes.trim(),
+        }),
+      });
+      const upJson = await upRes.json().catch(() => ({}));
+      if (!upRes.ok || !upJson?.success) {
+        throw new Error(String(upJson?.error || 'Failed to save changes'));
+      }
+      const sendAction = reviseTarget.status === 'sent' ? 'resend' : 'send';
+      const sendRes = await fetch(`/api/vendor/quotes/${encodeURIComponent(reviseTarget.id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ action: sendAction }),
+      });
+      const sendJson = await sendRes.json().catch(() => ({}));
+      if (!sendRes.ok || !sendJson?.success) {
+        throw new Error(String(sendJson?.error || 'Failed to send to couple'));
+      }
+      toast.success('Revised quote sent to the couple');
+      setShowReviseModal(false);
+      setReviseTarget(null);
+      await fetchQuotes();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not revise quote');
+    } finally {
+      setReviseSubmitting(false);
+    }
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'sent': return 'bg-blue-100 text-blue-800';
@@ -146,6 +246,7 @@ export default function VendorQuotesPage() {
       case 'accepted': return 'bg-green-100 text-green-800';
       case 'rejected': return 'bg-red-100 text-red-800';
       case 'expired': return 'bg-yellow-100 text-yellow-800';
+      case 'requote_requested': return 'bg-purple-100 text-purple-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -157,6 +258,7 @@ export default function VendorQuotesPage() {
       case 'accepted': return '✅';
       case 'rejected': return '❌';
       case 'expired': return '⏰';
+      case 'requote_requested': return '🔁';
       default: return '📋';
     }
   };
@@ -292,6 +394,16 @@ export default function VendorQuotesPage() {
                   Sent ({quotes.filter(q => q.status === 'sent').length})
                 </button>
                 <button
+                  onClick={() => setSelectedStatus('requote_requested')}
+                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                    selectedStatus === 'requote_requested'
+                      ? 'bg-purple-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  Requote ({quotes.filter(q => q.status === 'requote_requested').length})
+                </button>
+                <button
                   onClick={() => setSelectedStatus('accepted')}
                   className={`px-4 py-2 rounded-lg font-medium transition-colors ${
                     selectedStatus === 'accepted' 
@@ -363,13 +475,28 @@ export default function VendorQuotesPage() {
                             View Details
                           </button>
                           {quote.status === 'draft' && (
-                            <button className="btn-outline btn-sm">
+                            <button
+                              onClick={() => handleSendQuote(quote)}
+                              className="btn-outline btn-sm"
+                            >
                               Send Quote
                             </button>
                           )}
                           {quote.status === 'sent' && (
-                            <button className="btn-outline btn-sm">
+                            <button
+                              onClick={() => handleSendQuote(quote)}
+                              className="btn-outline btn-sm"
+                            >
                               Resend
+                            </button>
+                          )}
+                          {quote.status === 'requote_requested' && (
+                            <button
+                              type="button"
+                              onClick={() => openReviseModal(quote)}
+                              className="btn-outline btn-sm text-purple-700 border-purple-300 hover:bg-purple-50"
+                            >
+                              Revise &amp; Resend
                             </button>
                           )}
                         </div>
@@ -461,7 +588,19 @@ export default function VendorQuotesPage() {
                   </div>
                 </div>
                 
-                <div className="bg-gray-50 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6">
+                <div className="bg-gray-50 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6 sm:justify-between sm:items-center">
+                  {selectedQuote.status === 'requote_requested' && (
+                    <button
+                      type="button"
+                      className="btn-primary btn-sm order-last sm:order-first"
+                      onClick={() => {
+                        openReviseModal(selectedQuote);
+                        setShowQuoteModal(false);
+                      }}
+                    >
+                      Revise &amp; Resend
+                    </button>
+                  )}
                   <div className="flex space-x-2">
                     <button
                       type="button"
@@ -477,7 +616,80 @@ export default function VendorQuotesPage() {
           </div>
         )}
 
-        {/* Create Quote Modal */}
+        {showReviseModal && reviseTarget && (
+          <div className="fixed inset-0 z-[60] overflow-y-auto">
+            <div className="flex min-h-full items-end justify-center pt-4 px-4 pb-20 text-center sm:items-center sm:p-0">
+              <div
+                className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
+                aria-hidden
+                onClick={() => !reviseSubmitting && setShowReviseModal(false)}
+              />
+              <div className="relative z-10 inline-block w-full max-w-lg transform overflow-hidden rounded-lg bg-white text-left shadow-xl sm:my-8">
+                <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-1">Revise quotation</h3>
+                  <p className="text-sm text-gray-600 mb-4">
+                    Update the details below, then we&apos;ll send the revised quote to {reviseTarget.coupleName}.
+                  </p>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Amount ($) *</label>
+                      <input
+                        type="number"
+                        className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+                        value={reviseForm.amount}
+                        onChange={(e) => setReviseForm((f) => ({ ...f, amount: e.target.value }))}
+                        disabled={reviseSubmitting}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Description *</label>
+                      <textarea
+                        rows={4}
+                        className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+                        value={reviseForm.description}
+                        onChange={(e) => setReviseForm((f) => ({ ...f, description: e.target.value }))}
+                        disabled={reviseSubmitting}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Notes (optional)</label>
+                      <textarea
+                        rows={2}
+                        className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+                        value={reviseForm.notes}
+                        onChange={(e) => setReviseForm((f) => ({ ...f, notes: e.target.value }))}
+                        disabled={reviseSubmitting}
+                      />
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      Service: {reviseTarget.serviceType} · {reviseTarget.location} · event{' '}
+                      {new Date(reviseTarget.eventDate).toLocaleDateString()}
+                    </p>
+                  </div>
+                </div>
+                <div className="bg-gray-50 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6 gap-2">
+                  <button
+                    type="button"
+                    disabled={reviseSubmitting}
+                    onClick={() => void submitReviseAndResend()}
+                    className="btn-primary btn-sm w-full sm:w-auto"
+                  >
+                    {reviseSubmitting ? 'Sending…' : 'Save and send to couple'}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-outline btn-sm w-full sm:w-auto"
+                    disabled={reviseSubmitting}
+                    onClick={() => setShowReviseModal(false)}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {showCreateModal && (
           <div className="fixed inset-0 z-50 overflow-y-auto">
             <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">

@@ -10,6 +10,7 @@ import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 import { UserDashboardWidgets } from '@/components/user/UserDashboardWidgets';
 import { InstantQuoteGenerator } from '@/components/user/InstantQuoteGenerator';
+import { UserQuotesManager } from '@/components/user/UserQuotesManager';
 import { UserBookingsManager } from '@/components/user/UserBookingsManager';
 import { GuestListTracker } from '@/components/user/GuestListTracker';
 import { BudgetTracker } from '@/components/user/BudgetTracker';
@@ -18,6 +19,7 @@ import { WeddingTimeline } from '@/components/user/WeddingTimeline';
 import { NotificationCenter } from '@/components/user/NotificationCenter';
 import { DocumentStorage } from '@/components/user/DocumentStorage';
 import { SeatingChartPlanner } from '@/components/user/SeatingChartPlanner';
+import { UserAllVendors } from '@/components/user/UserAllVendors';
 
 function coupleFirstNames(wd: { brideName?: string; groomName?: string } | null | undefined): string | null {
   const b = wd?.brideName?.trim();
@@ -33,7 +35,7 @@ export default function DashboardPage() {
   const router = useRouter();
   type WelcomeTone = 'returning' | 'registered' | 'firstLogin';
   const [welcomeTone, setWelcomeTone] = useState<WelcomeTone>('returning');
-  const [activeTab, setActiveTab] = useState<'overview' | 'quotes' | 'guests' | 'budget' | 'map' | 'timeline' | 'notifications' | 'documents' | 'seating' | 'bookings'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'quotes' | 'quotations' | 'guests' | 'budget' | 'map' | 'timeline' | 'notifications' | 'documents' | 'seating' | 'bookings' | 'allVendors'>('overview');
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -79,6 +81,7 @@ export default function DashboardPage() {
   const tabs = [
     { id: 'overview', label: 'Overview', icon: '📊' },
     { id: 'quotes', label: 'Get Quotes', icon: '💬' },
+    { id: 'quotations', label: 'My Quotations', icon: '🧾' },
     { id: 'bookings', label: 'My Bookings', icon: '📅' },
     { id: 'guests', label: 'Guest List', icon: '👥' },
     { id: 'budget', label: 'Budget', icon: '💰' },
@@ -86,6 +89,7 @@ export default function DashboardPage() {
     { id: 'notifications', label: 'Notifications', icon: '🔔' },
     { id: 'documents', label: 'Documents', icon: '📁' },
     { id: 'seating', label: 'Seating Chart', icon: '🪑' },
+    { id: 'allVendors', label: 'All Vendors', icon: '🏢' },
     { id: 'map', label: 'Vendor Map', icon: '🗺️' }
   ];
 
@@ -159,6 +163,10 @@ export default function DashboardPage() {
               quoteGenerator={quoteGenerator}
             />
           )}
+
+          {activeTab === 'quotations' && (
+            <UserQuotesManager />
+          )}
           
           {activeTab === 'bookings' && (
             <UserBookingsManager />
@@ -190,6 +198,10 @@ export default function DashboardPage() {
           
           {activeTab === 'seating' && (
             <SeatingChartPlanner />
+          )}
+
+          {activeTab === 'allVendors' && (
+            <UserAllVendors />
           )}
           
           {activeTab === 'map' && (

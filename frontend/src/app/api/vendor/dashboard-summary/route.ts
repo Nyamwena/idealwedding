@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readDataFile } from '@/lib/dataFileStore';
 import { getVendorSession } from '@/lib/vendorSession';
-import { leadBelongsToVendor } from '@/lib/vendorLeadScope';
+import { findVendorBySessionEmail, leadBelongsToVendor } from '@/lib/vendorLeadScope';
 import { findVendorProfile } from '@/lib/vendorProfileScope';
 
 export const dynamic = 'force-dynamic';
@@ -18,18 +18,20 @@ export async function GET(request: NextRequest) {
     }
     const { userId, vendorId } = session;
 
-    const [bookings, payments, leads, quotes, profiles] = await Promise.all([
+    const [bookings, payments, leads, quotes, profiles, vendors] = await Promise.all([
       readDataFile<any[]>('bookings.json', []),
       readDataFile<any[]>('payments.json', []),
       readDataFile<any[]>('vendor-leads.json', []),
       readDataFile<any[]>('quotes.json', []),
       readDataFile<any[]>('vendor-profiles.json', []),
+      readDataFile<any[]>('vendors.json', []),
     ]);
 
+    const catalogVendor = findVendorBySessionEmail(vendors, session);
     const vBookings = bookings.filter((b) => matchesVendor(b, userId, vendorId));
     const vPayments = payments.filter((p) => matchesVendor(p, userId, vendorId));
-    const vLeads = leads.filter((l) => leadBelongsToVendor(l, session));
-    const vQuotes = quotes.filter((q) => matchesVendor(q, userId, vendorId));
+    const vLeads = leads.filter((l) => leadBelongsToVendor(l, session, catalogVendor));
+    const vQuotes = quotes.filter((q) => leadBelongsToVendor(q, session, catalogVendor));
 
     const profile = findVendorProfile(profiles, session);
     const testimonials = Array.isArray(profile?.testimonials) ? profile.testimonials : [];

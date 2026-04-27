@@ -104,8 +104,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             credentials: 'include',
             body: JSON.stringify({ email, password }),
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.message || 'Login failed');
+        let data: { message?: string; user?: unknown } = {};
+        try {
+            const text = await res.text();
+            if (text) data = JSON.parse(text) as { message?: string; user?: unknown };
+        } catch {
+            if (!res.ok) throw new Error(res.statusText || 'Login failed');
+        }
+        if (!res.ok) {
+            const m = data.message;
+            const detail =
+                typeof m === 'string' ? m : Array.isArray(m) && m[0] != null ? String(m[0]) : 'Login failed';
+            throw new Error(detail);
+        }
         const envelope = data as Record<string, unknown>;
         const raw = envelope.user as Record<string, unknown> | undefined;
         if (!raw) throw new Error(data.message || 'Login failed');

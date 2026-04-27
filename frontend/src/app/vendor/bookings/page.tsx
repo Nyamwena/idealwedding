@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import toast from 'react-hot-toast';
 import Link from 'next/link';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
@@ -26,9 +26,9 @@ interface VendorBooking {
 }
 
 export default function VendorBookingsPage() {
-  const router = useRouter();
   const [bookings, setBookings] = useState<VendorBooking[]>([]);
   const [loading, setLoading] = useState(true);
+  const [actionId, setActionId] = useState<string | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [selectedBooking, setSelectedBooking] = useState<VendorBooking | null>(null);
   const [showBookingModal, setShowBookingModal] = useState(false);
@@ -83,6 +83,60 @@ export default function VendorBookingsPage() {
   const handleViewBooking = (booking: VendorBooking) => {
     setSelectedBooking(booking);
     setShowBookingModal(true);
+  };
+
+  const handleConfirmBooking = async (booking: VendorBooking) => {
+    setActionId(booking.id);
+    try {
+      const res = await fetch(`/api/vendor/bookings/${encodeURIComponent(booking.id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ action: 'confirm' }),
+      });
+      const result = await res.json().catch(() => ({}));
+      if (!res.ok || !result?.success) {
+        throw new Error(result?.error || 'Failed to confirm booking');
+      }
+      setBookings((prev) =>
+        prev.map((b) => (b.id === booking.id ? { ...b, status: 'confirmed' as const, updatedAt: new Date().toISOString() } : b)),
+      );
+      if (selectedBooking?.id === booking.id) {
+        setSelectedBooking({ ...selectedBooking, status: 'confirmed' });
+      }
+      toast.success('Booking confirmed.');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not confirm booking');
+    } finally {
+      setActionId(null);
+    }
+  };
+
+  const handleMarkComplete = async (booking: VendorBooking) => {
+    setActionId(booking.id);
+    try {
+      const res = await fetch(`/api/vendor/bookings/${encodeURIComponent(booking.id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ action: 'complete' }),
+      });
+      const result = await res.json().catch(() => ({}));
+      if (!res.ok || !result?.success) {
+        throw new Error(result?.error || 'Failed to complete booking');
+      }
+      setBookings((prev) =>
+        prev.map((b) => (b.id === booking.id ? { ...b, status: 'completed' as const, updatedAt: new Date().toISOString() } : b)),
+      );
+      if (selectedBooking?.id === booking.id) {
+        setSelectedBooking({ ...selectedBooking, status: 'completed' });
+      }
+      toast.success('Booking marked as completed.');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not update booking');
+    } finally {
+      setActionId(null);
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -318,13 +372,23 @@ export default function VendorBookingsPage() {
                             View Details
                           </button>
                           {booking.status === 'pending' && (
-                            <button className="btn-outline btn-sm">
-                              Confirm Booking
+                            <button
+                              type="button"
+                              onClick={() => handleConfirmBooking(booking)}
+                              disabled={actionId === booking.id}
+                              className="btn-outline btn-sm"
+                            >
+                              {actionId === booking.id ? 'Confirming…' : 'Confirm Booking'}
                             </button>
                           )}
                           {booking.status === 'confirmed' && (
-                            <button className="btn-outline btn-sm">
-                              Mark Complete
+                            <button
+                              type="button"
+                              onClick={() => handleMarkComplete(booking)}
+                              disabled={actionId === booking.id}
+                              className="btn-outline btn-sm"
+                            >
+                              {actionId === booking.id ? 'Updating…' : 'Mark Complete'}
                             </button>
                           )}
                         </div>
@@ -428,7 +492,31 @@ export default function VendorBookingsPage() {
                 </div>
                 
                 <div className="bg-gray-50 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6">
-                  <div className="flex space-x-2">
+                  <div className="flex flex-wrap gap-2">
+                    {selectedBooking.status === 'pending' && (
+                      <button
+                        type="button"
+                        className="btn-primary btn-sm"
+                        disabled={actionId === selectedBooking.id}
+                        onClick={() => {
+                          void handleConfirmBooking(selectedBooking);
+                        }}
+                      >
+                        {actionId === selectedBooking.id ? 'Confirming…' : 'Confirm Booking'}
+                      </button>
+                    )}
+                    {selectedBooking.status === 'confirmed' && (
+                      <button
+                        type="button"
+                        className="btn-primary btn-sm"
+                        disabled={actionId === selectedBooking.id}
+                        onClick={() => {
+                          void handleMarkComplete(selectedBooking);
+                        }}
+                      >
+                        {actionId === selectedBooking.id ? 'Updating…' : 'Mark Complete'}
+                      </button>
+                    )}
                     <button
                       type="button"
                       className="btn-outline btn-sm"

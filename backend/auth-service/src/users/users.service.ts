@@ -1,4 +1,11 @@
-import { Injectable, NotFoundException, ConflictException, BadRequestException, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+  BadRequestException,
+  ForbiddenException,
+  OnModuleInit,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -43,9 +50,10 @@ export class UsersService implements OnModuleInit {
       throw new ConflictException('User with this email already exists');
     }
 
-    // Create new user
+    // Create new user (store email lowercased so login matches regardless of casing)
     const user = this.userRepository.create({
       ...createUserDto,
+      email: createUserDto.email.trim().toLowerCase(),
       role: createUserDto.role || UserRole.USER,
     });
 
@@ -80,14 +88,16 @@ export class UsersService implements OnModuleInit {
   }
 
   async findByEmail(email: string): Promise<User | null> {
-    return this.userRepository.findOne({ where: { email } });
+    const normalized = email.trim().toLowerCase();
+    return this.userRepository
+      .createQueryBuilder('user')
+      .where('LOWER(user.email) = :email', { email: normalized })
+      .getOne();
   }
 
+  /** Loads user including password hash (same as findByEmail; kept for call sites). */
   async findByEmailForAuth(email: string): Promise<User | null> {
-    return this.userRepository.findOne({
-      where: { email },
-      select: ['id', 'email', 'firstName', 'lastName', 'role', 'passwordHash'],
-    });
+    return this.findByEmail(email);
   }
 
   async update(id: string, updateUserDto: UpdateUserDto): Promise<User> {
@@ -112,6 +122,21 @@ export class UsersService implements OnModuleInit {
 
     await user.setPassword(newPassword);
     await this.userRepository.save(user);
+  }
+
+  async adminResetVendorPasswordByEmail(email: string, newPassword: string): Promise<void> {
+    const normalized = email.trim().toLowerCase();
+    const user = await this.userRepository
+      .createQueryBuilder('user')
+      .where('LOWER(user.email) = :email', { email: normalized })
+      .getOne();
+    if (!user) {
+      throw new NotFoundException('No login account found for this email');
+    }
+    if (user.role !== UserRole.VENDOR) {
+      throw new ForbiddenException('This action only applies to vendor accounts');
+    }
+    await this.updatePassword(user.id, newPassword);
   }
 
   async verifyEmail(token: string): Promise<User> {

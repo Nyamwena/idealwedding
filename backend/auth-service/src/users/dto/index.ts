@@ -82,4 +82,16 @@ export class VerifyEmailDto {
   @ApiProperty({ description: 'Email verification token' })
   @IsString()
   token: string;
+}
+
+export class AdminResetVendorPasswordDto {
+  @ApiProperty({ description: 'Vendor account email' })
+  @IsEmail()
+  email: string;
+
+  @ApiProperty({ description: 'New password', minLength: 8 })
+  @IsString()
+  @MinLength(8)
+  @MaxLength(128)
+  newPassword: string;
 } 

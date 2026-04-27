@@ -11,7 +11,8 @@ import { Exclude } from 'class-transformer';
 import * as bcrypt from 'bcryptjs';
 import { UserRole } from '../../types';
 
-@Entity('User')
+/** MySQL stores this as `user` (lowercase); keep name aligned to avoid sync/create conflicts. */
+@Entity({ name: 'user' })
 @Index(['email'], { unique: true })
 export class User {
   @PrimaryGeneratedColumn()

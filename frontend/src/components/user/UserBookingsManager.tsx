@@ -25,9 +25,26 @@ interface UserBooking {
   updatedAt: string;
 }
 
+interface UserQuote {
+  id: string;
+  vendorName?: string;
+  service?: string;
+  serviceType?: string;
+  serviceCategory?: string;
+  amount?: number;
+  status: 'draft' | 'sent' | 'accepted' | 'rejected' | 'expired' | string;
+  eventDate?: string;
+  weddingDate?: string;
+  location?: string;
+  description?: string;
+  sentAt?: string;
+  createdAt?: string;
+}
+
 export function UserBookingsManager() {
   const { user } = useAuth();
   const [bookings, setBookings] = useState<UserBooking[]>([]);
+  const [quotes, setQuotes] = useState<UserQuote[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedBooking, setSelectedBooking] = useState<UserBooking | null>(null);
@@ -43,6 +60,7 @@ export function UserBookingsManager() {
       return;
     }
     fetchUserBookings();
+    fetchUserQuotes();
   }, [user?.id]);
 
   const fetchUserBookings = async () => {
@@ -63,6 +81,57 @@ export function UserBookingsManager() {
       setBookings([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchUserQuotes = async () => {
+    try {
+      const response = await fetch('/api/user/quotes', { credentials: 'include' });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Failed to fetch quotes');
+      const rows = Array.isArray(result.data) ? result.data : [];
+      setQuotes(rows as UserQuote[]);
+    } catch (err) {
+      console.error('Failed to fetch user quotes:', err);
+      setQuotes([]);
+    }
+  };
+
+  const handleQuoteAction = async (quoteId: string, action: 'approve' | 'reject') => {
+    setActionLoading(quoteId);
+    setSuccessMessage(null);
+    setError(null);
+    try {
+      const response = await fetch(`/api/user/quotes/${encodeURIComponent(quoteId)}`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result?.success) {
+        throw new Error(result?.error || 'Failed to update quote');
+      }
+      setQuotes((prev) =>
+        prev.map((q) =>
+          q.id === quoteId
+            ? { ...q, status: action === 'approve' ? 'accepted' : 'rejected' }
+            : q,
+        ),
+      );
+      if (action === 'approve') {
+        await fetchUserBookings();
+      }
+      setSuccessMessage(
+        action === 'approve'
+          ? 'Quote approved and moved to your bookings.'
+          : 'Quote rejected successfully.',
+      );
+    } catch (err) {
+      console.error('Failed to update quote:', err);
+      setError(err instanceof Error ? err.message : 'Failed to update quote.');
+    } finally {
+      setActionLoading(null);
     }
   };
 
@@ -220,6 +289,62 @@ export function UserBookingsManager() {
             Completed ({bookings.filter(b => b.status === 'completed').length})
           </button>
         </div>
+      </div>
+
+      {/* Incoming Quotes */}
+      <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-200">
+          <h3 className="text-xl font-bold text-gray-900">Incoming Quotations</h3>
+          <p className="text-sm text-gray-600 mt-1">
+            Approve a sent quote to automatically create a booking.
+          </p>
+        </div>
+        {quotes.filter((q) => q.status === 'sent').length > 0 ? (
+          <div className="divide-y divide-gray-200">
+            {quotes
+              .filter((q) => q.status === 'sent')
+              .map((quote) => (
+                <div key={quote.id} className="p-6">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <p className="font-semibold text-gray-900">
+                        {quote.vendorName || 'Vendor'} - {quote.serviceType || quote.service || 'Service quote'}
+                      </p>
+                      <p className="text-sm text-gray-600 mt-1">
+                        {quote.description || 'Quote details provided by vendor.'}
+                      </p>
+                      <div className="mt-3 text-sm text-gray-600 flex flex-wrap gap-4">
+                        <span>Amount: ${Number(quote.amount || 0).toLocaleString()}</span>
+                        <span>
+                          Date:{' '}
+                          {new Date(quote.eventDate || quote.weddingDate || quote.createdAt || '').toLocaleDateString()}
+                        </span>
+                        <span>Location: {quote.location || 'Not set'}</span>
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <button
+                        onClick={() => handleQuoteAction(quote.id, 'approve')}
+                        disabled={actionLoading === quote.id}
+                        className="btn-primary btn-sm"
+                      >
+                        {actionLoading === quote.id ? 'Processing...' : 'Approve Quote'}
+                      </button>
+                      <button
+                        onClick={() => handleQuoteAction(quote.id, 'reject')}
+                        disabled={actionLoading === quote.id}
+                        className="btn-outline btn-sm text-red-600 border-red-300 hover:bg-red-50"
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+          </div>
+        ) : (
+          <div className="p-6 text-sm text-gray-600">No sent quotations yet.</div>
+        )}
       </div>
 
       {/* Bookings List */}

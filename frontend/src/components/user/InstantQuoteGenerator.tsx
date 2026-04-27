@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useQuoteGenerator, QuoteRequest, VendorMatch, QuoteResponse } from '@/hooks/useQuoteGenerator';
+import { useQuoteGenerator, QuoteRequest, VendorMatch } from '@/hooks/useQuoteGenerator';
 
 interface InstantQuoteGeneratorProps {
   quoteGenerator: ReturnType<typeof useQuoteGenerator>;
@@ -13,9 +13,6 @@ export function InstantQuoteGenerator({ quoteGenerator }: InstantQuoteGeneratorP
     createQuoteRequest,
     matchedVendors,
     searchVendors,
-    quoteResponses,
-    acceptQuote,
-    declineQuote,
     isLoading,
     isSearching,
     error
@@ -94,7 +91,9 @@ export function InstantQuoteGenerator({ quoteGenerator }: InstantQuoteGeneratorP
           <div>
             <h2 className="text-2xl font-bold text-gray-900 mb-2">Instant Quote Generator</h2>
             <p className="text-gray-600">
-              Get personalized quotes from vendors instantly. Enter your requirements and we'll match you with the best vendors.
+              Post your request once—<strong>all approved vendors</strong> can see it and send quotations. It stays
+              open until you <strong>approve a quotation</strong> under <strong>My Quotations</strong>. We also
+              show matching vendors on this page after you submit.
             </p>
           </div>
           <button
@@ -264,12 +263,16 @@ export function InstantQuoteGenerator({ quoteGenerator }: InstantQuoteGeneratorP
                   </div>
                   <div className="text-right">
                     <div className="text-lg font-bold text-gray-900">${request.budget.toLocaleString()}</div>
-                    <div className={`text-sm px-2 py-1 rounded-full ${
-                      request.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                      request.status === 'quoted' ? 'bg-blue-100 text-blue-800' :
-                      'bg-green-100 text-green-800'
-                    }`}>
-                      {request.status}
+                    <div
+                      className={`text-sm px-2 py-1 rounded-full ${
+                        request.status === 'open'
+                          ? 'bg-amber-100 text-amber-900'
+                          : request.status === 'awarded'
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-gray-100 text-gray-800'
+                      }`}
+                    >
+                      {request.status === 'open' ? 'Open to vendors' : request.status === 'awarded' ? 'Quote approved' : request.status}
                     </div>
                   </div>
                 </div>
@@ -295,81 +298,10 @@ export function InstantQuoteGenerator({ quoteGenerator }: InstantQuoteGeneratorP
         </div>
       )}
 
-      {/* Quote Responses */}
-      {quoteResponses.length > 0 && (
-        <div className="bg-white rounded-2xl shadow-lg p-6">
-          <h3 className="text-xl font-bold text-gray-900 mb-6">Quote Responses</h3>
-          <div className="space-y-4">
-            {quoteResponses.map((response) => (
-              <div key={response.id} className="border border-gray-200 rounded-xl p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h4 className="font-semibold text-gray-900">{response.vendorName}</h4>
-                    <p className="text-gray-600 text-sm">{response.description}</p>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-2xl font-bold text-primary-600">${response.price.toLocaleString()}</div>
-                    <div className={`text-sm px-2 py-1 rounded-full ${
-                      response.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                      response.status === 'accepted' ? 'bg-green-100 text-green-800' :
-                      'bg-red-100 text-red-800'
-                    }`}>
-                      {response.status}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
-                  <div>
-                    <h5 className="font-medium text-gray-900 mb-2">Included:</h5>
-                    <ul className="text-sm text-gray-600 space-y-1">
-                      {response.inclusions.map((item, index) => (
-                        <li key={index} className="flex items-center">
-                          <span className="text-green-500 mr-2">✓</span>
-                          {item}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                  <div>
-                    <h5 className="font-medium text-gray-900 mb-2">Not Included:</h5>
-                    <ul className="text-sm text-gray-600 space-y-1">
-                      {response.exclusions.map((item, index) => (
-                        <li key={index} className="flex items-center">
-                          <span className="text-red-500 mr-2">✗</span>
-                          {item}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div className="text-sm text-gray-500">
-                    Valid until: {new Date(response.validUntil).toLocaleDateString()}
-                  </div>
-                  {response.status === 'pending' && (
-                    <div className="flex space-x-3">
-                      <button
-                        onClick={() => declineQuote(response.id)}
-                        className="btn-outline btn-sm text-red-600 border-red-300 hover:bg-red-50"
-                      >
-                        Decline
-                      </button>
-                      <button
-                        onClick={() => acceptQuote(response.id)}
-                        className="btn-primary btn-sm"
-                      >
-                        Accept Quote
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      <div className="bg-primary-50 border border-primary-100 rounded-2xl p-4 text-sm text-primary-900">
+        <strong>Vendor responses</strong> appear under the <strong>My Quotations</strong> tab. Approve one there; your
+        open request is then no longer shown to other vendors.
+      </div>
 
       {/* Matched Vendors */}
       {matchedVendors.length > 0 && (

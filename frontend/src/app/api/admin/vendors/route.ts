@@ -3,10 +3,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readDataFile, writeDataFile } from '@/lib/dataFileStore';
 import { verifyToken } from '@/lib/auth';
+import { newVendorWalletBalanceFields } from '@/lib/vendorWalletStarter';
 
 const getVendors = () => readDataFile<any[]>('vendors.json', []);
 const getCreditWallets = () => readDataFile<any[]>('vendor-credit-wallets.json', []);
 const saveVendors = (vendors: any[]) => writeDataFile('vendors.json', vendors);
+const saveCreditWallets = (wallets: any[]) => writeDataFile('vendor-credit-wallets.json', wallets);
 const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'https://api-auth.idealweddings.space';
 const DEFAULT_VENDOR_PASSWORD = 'vendorpassword';
 
@@ -112,7 +114,7 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const vendors = await getVendors();
+        const [vendors, wallets] = await Promise.all([getVendors(), getCreditWallets()]);
 
         const existingVendor = vendors.find((v: any) => v.email === email);
         if (existingVendor) {
@@ -125,6 +127,9 @@ export async function POST(request: NextRequest) {
         // Create (or confirm existing) auth account for this vendor first.
         await ensureVendorAuthAccount(name, email);
 
+        const starterFields = newVendorWalletBalanceFields();
+        const starterCredits = Number(starterFields.currentCredits || 0);
+
         const newVendor = {
             id: (vendors.length + 1).toString(),
             name, email, category,
@@ -133,7 +138,7 @@ export async function POST(request: NextRequest) {
             rating: 0,
             joinedDate: new Date().toISOString().split('T')[0],
             lastActive: 'Never',
-            credits: 0,
+            credits: starterCredits,
             leadsGenerated: 0,
             quotesSent: 0,
             bookingsCompleted: 0,
@@ -146,7 +151,23 @@ export async function POST(request: NextRequest) {
         };
 
         vendors.push(newVendor);
-        await saveVendors(vendors);
+
+        const normalizedEmail = String(email || '').trim().toLowerCase();
+        const hasWallet = wallets.some(
+            (w: any) =>
+                String(w.vendorId || '') === String(newVendor.id) ||
+                String(w.email || '').toLowerCase() === normalizedEmail,
+        );
+        if (!hasWallet) {
+            wallets.push({
+                key: String(newVendor.id),
+                vendorId: String(newVendor.id),
+                email: normalizedEmail,
+                ...starterFields,
+            });
+        }
+
+        await Promise.all([saveVendors(vendors), saveCreditWallets(wallets)]);
 
         return NextResponse.json({
             success: true,

@@ -11,6 +11,7 @@ export function VendorTopMenu() {
     { href: '/vendor/leads', label: 'Leads', icon: '💬' },
     { href: '/vendor/bookings', label: 'Bookings', icon: '📅' },
     { href: '/vendor/quotes', label: 'Quotes', icon: '💰' },
+    { href: '/vendor/open-quotes', label: 'Open Quotes', icon: '📋' },
     { href: '/vendor/services', label: 'Services', icon: '🛠️' },
     { href: '/vendor/analytics', label: 'Analytics', icon: '📊' },
     { href: '/vendor/ads', label: 'Ads', icon: '📢' },

@@ -118,26 +118,28 @@ export default function LoginPage() {
                 router.push(`/dashboard${firstQ}`);
             }
         } catch (err: any) {
-            if (
-                err.message?.includes(
-                    'Invalid credentials'
-                )
-            ) {
+            const msg = typeof err?.message === 'string' ? err.message : '';
+            const lower = msg.toLowerCase();
+            if (msg.includes('Invalid credentials') || lower.includes('unauthorized')) {
+                setError('Invalid email or password. Please try again.');
+            } else if (msg.includes('User not found') || lower.includes('not found')) {
+                setError('No account found with this email address.');
+            } else if (/1045|access denied for user|sqlstate.*1045/i.test(msg)) {
                 setError(
-                    'Invalid email or password. Please try again.'
+                    'MySQL rejected the connection (error 1045). Update DATABASE_URL in backend/auth-service/.env with the correct MySQL user and password, then restart the auth service.',
                 );
             } else if (
-                err.message?.includes(
-                    'User not found'
+                /cannot reach the auth service|econnrefused|fetch failed|failed to fetch|503|502|service unavailable|bad gateway|internal server error|network|aborted|timeout/i.test(
+                    msg,
                 )
             ) {
                 setError(
-                    'No account found with this email address.'
+                    'Sign-in is unavailable. Start MySQL (listen on port 3306), then start the auth API: in backend/auth-service run npm run start (port 3002). Confirm frontend .env has AUTH_SERVICE_URL or NEXT_PUBLIC_AUTH_SERVICE_URL pointing at http://127.0.0.1:3002. Then try again.',
                 );
+            } else if (msg.length > 0 && msg.length < 500) {
+                setError(msg);
             } else {
-                setError(
-                    'Login failed. Please check your connection and try again.'
-                );
+                setError('Login failed. Please check your connection and try again.');
             }
         } finally {
             setIsLoading(false);

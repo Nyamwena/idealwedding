@@ -13,7 +13,7 @@ interface BannerAd {
   title: string;
   imageUrl: string;
   targetUrl: string;
-  position: 'top' | 'sidebar' | 'bottom' | 'popup';
+  position: 'top' | 'sidebar' | 'bottom' | 'popup' | 'vendor_map';
   status: 'active' | 'inactive' | 'scheduled' | 'pending_review';
   startDate: string;
   endDate: string;
@@ -32,6 +32,13 @@ interface BannerAd {
   availableCredits?: number;
   pendingAdFunds?: number;
   canServePaidClick?: boolean;
+}
+
+interface VendorOption {
+  id: string;
+  name: string;
+  email: string;
+  category?: string;
 }
 
 interface AdSenseConfig {
@@ -159,6 +166,7 @@ export default function AdminAdsPage() {
   const { user, isAdmin, logout } = useAuth();
   const router = useRouter();
   const [bannerAds, setBannerAds] = useState<BannerAd[]>([]);
+  const [vendors, setVendors] = useState<VendorOption[]>([]);
   const [adSenseConfig, setAdSenseConfig] = useState<AdSenseConfig>({
     enabled: false,
     clientId: '',
@@ -198,7 +206,8 @@ export default function AdminAdsPage() {
     cost: 0,
     maxDailyBudget: 0,
     advertiser: '',
-    category: ''
+    category: '',
+    vendorId: ''
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -207,6 +216,7 @@ export default function AdminAdsPage() {
   const [showAddFundsModal, setShowAddFundsModal] = useState(false);
   const [addFundsForAd, setAddFundsForAd] = useState<BannerAd | null>(null);
   const [addFundsAmount, setAddFundsAmount] = useState('50');
+  const [addFundsCampaignQuery, setAddFundsCampaignQuery] = useState('');
   const [addFundsLoading, setAddFundsLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
@@ -228,40 +238,42 @@ export default function AdminAdsPage() {
       setLoading(true);
       setError(null);
       
-      // Load banner ads
-      const adsResponse = await fetch('/api/admin/advertisements?type=bannerAds', {
-        credentials: 'include',
-      });
-      const adsResult = await adsResponse.json();
-      
-      if (!adsResponse.ok) {
-        throw new Error(adsResult.error || 'Failed to load banner ads');
-      }
-      
-      setBannerAds(adsResult.data || []);
-      
-      // Load AdSense config
-      const configResponse = await fetch('/api/admin/advertisements?type=adSenseConfig');
-      const configResult = await configResponse.json();
-      
-      if (!configResponse.ok) {
-        throw new Error(configResult.error || 'Failed to load AdSense config');
-      }
-      
-      setAdSenseConfig(normalizeAdSenseConfig(configResult.data));
+      const [adsResponse, configResponse, fraudResponse, vendorsResponse] = await Promise.all([
+        fetch('/api/admin/advertisements?type=bannerAds', { credentials: 'include' }),
+        fetch('/api/admin/advertisements?type=adSenseConfig'),
+        fetch('/api/admin/advertisements?type=fraudAudit'),
+        fetch('/api/admin/vendors', { credentials: 'include' }),
+      ]);
+      const [adsResult, configResult, fraudResult, vendorsResult] = await Promise.all([
+        adsResponse.json(),
+        configResponse.json(),
+        fraudResponse.json(),
+        vendorsResponse.json(),
+      ]);
 
-      const fraudResponse = await fetch('/api/admin/advertisements?type=fraudAudit');
-      const fraudResult = await fraudResponse.json();
-      if (!fraudResponse.ok) {
-        throw new Error(fraudResult.error || 'Failed to load fraud audit');
-      }
+      if (!adsResponse.ok) throw new Error(adsResult.error || 'Failed to load banner ads');
+      if (!configResponse.ok) throw new Error(configResult.error || 'Failed to load AdSense config');
+      if (!fraudResponse.ok) throw new Error(fraudResult.error || 'Failed to load fraud audit');
+      if (!vendorsResponse.ok) throw new Error(vendorsResult.error || 'Failed to load vendors');
+
+      setBannerAds(adsResult.data || []);
+      setAdSenseConfig(normalizeAdSenseConfig(configResult.data));
       setFraudAudit(normalizeFraudAudit(fraudResult.data));
+      setVendors(
+        (vendorsResult.data || []).map((v: any) => ({
+          id: String(v.id || ''),
+          name: String(v.name || ''),
+          email: String(v.email || ''),
+          category: String(v.category || ''),
+        })),
+      );
       
     } catch (error) {
       console.error('Error loading advertisement data:', error);
       setError(error instanceof Error ? error.message : 'Failed to load advertisement data');
       // Set default values to prevent crashes
       setBannerAds([]);
+      setVendors([]);
       setAdSenseConfig(normalizeAdSenseConfig(null));
       setFraudAudit(normalizeFraudAudit(null));
     } finally {
@@ -309,6 +321,7 @@ export default function AdminAdsPage() {
   const getPositionBadge = (position: string) => {
     const styles = {
       top: 'bg-blue-100 text-blue-800',
+      vendor_map: 'bg-amber-100 text-amber-900',
       sidebar: 'bg-purple-100 text-purple-800',
       bottom: 'bg-orange-100 text-orange-800',
       popup: 'bg-pink-100 text-pink-800'
@@ -366,6 +379,7 @@ export default function AdminAdsPage() {
   const openAddFundsModal = (ad: BannerAd) => {
     setAddFundsForAd(ad);
     setAddFundsAmount('50');
+    setAddFundsCampaignQuery(`${ad.title} — ${ad.advertiser}`);
     setShowAddFundsModal(true);
     setError(null);
   };
@@ -470,6 +484,10 @@ export default function AdminAdsPage() {
 
   const handleUpdateAd = async () => {
     if (!editingAd) return;
+    if (!editingAd.vendorId) {
+      setError('Select a vendor. Every ad must be linked to a vendor.');
+      return;
+    }
     
     try {
       setActionLoading(`edit-${editingAd.id}`);
@@ -513,6 +531,15 @@ export default function AdminAdsPage() {
   };
 
   const handleCreateAd = async () => {
+    if (!newAd.vendorId) {
+      setError('Select a vendor. Every ad must be linked to a vendor.');
+      return;
+    }
+    const selectedVendor = vendors.find((v) => v.id === newAd.vendorId);
+    if (!selectedVendor) {
+      setError('Selected vendor was not found.');
+      return;
+    }
     try {
       setActionLoading('create-ad');
       setError(null);
@@ -526,7 +553,10 @@ export default function AdminAdsPage() {
         body: JSON.stringify({
           type: 'bannerAd',
           bidPerClick: newAd.cost,
-          ...newAd
+          ...newAd,
+          advertiser: selectedVendor.name,
+          advertiserEmail: selectedVendor.email,
+          category: newAd.category || selectedVendor.category || '',
         }),
       });
       
@@ -555,7 +585,8 @@ export default function AdminAdsPage() {
         cost: 0,
         maxDailyBudget: 0,
         advertiser: '',
-        category: ''
+        category: '',
+        vendorId: ''
       });
       setShowAddAdModal(false);
       
@@ -1239,15 +1270,61 @@ export default function AdminAdsPage() {
                             />
                           </div>
                           <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Advertiser *</label>
-                            <input 
-                              type="text" 
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Advertiser (Vendor) *</label>
+                            <input
+                              type="text"
+                              list="vendor-options-add"
                               value={newAd.advertiser}
-                              onChange={(e) => setNewAd(prev => ({ ...prev, advertiser: e.target.value }))}
+                              onChange={(e) => {
+                                const advertiser = e.target.value;
+                                const selectedVendor = vendors.find(
+                                  (v) =>
+                                    v.name.toLowerCase() === advertiser.toLowerCase() ||
+                                    `${v.name} (${v.email})`.toLowerCase() === advertiser.toLowerCase(),
+                                );
+                                setNewAd((prev) => ({
+                                  ...prev,
+                                  advertiser,
+                                  vendorId: selectedVendor?.id || prev.vendorId,
+                                  category: selectedVendor?.category || prev.category,
+                                }));
+                              }}
                               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                              placeholder="Enter advertiser name"
+                              placeholder="Type vendor name to search..."
                               required
                             />
+                            <datalist id="vendor-options-add">
+                              {vendors.map((vendor) => (
+                                <option key={vendor.id} value={vendor.name}>
+                                  {vendor.email}
+                                </option>
+                              ))}
+                            </datalist>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Linked Vendor *</label>
+                            <select
+                              value={newAd.vendorId}
+                              onChange={(e) => {
+                                const vendorId = e.target.value;
+                                const selectedVendor = vendors.find((v) => v.id === vendorId);
+                                setNewAd((prev) => ({
+                                  ...prev,
+                                  vendorId,
+                                  advertiser: selectedVendor?.name || prev.advertiser,
+                                  category: selectedVendor?.category || prev.category,
+                                }));
+                              }}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                              required
+                            >
+                              <option value="">Select vendor...</option>
+                              {vendors.map((vendor) => (
+                                <option key={vendor.id} value={vendor.id}>
+                                  {vendor.name} ({vendor.email})
+                                </option>
+                              ))}
+                            </select>
                           </div>
                         </div>
                         
@@ -1325,6 +1402,7 @@ export default function AdminAdsPage() {
                               required
                             >
                               <option value="top">Top</option>
+                              <option value="vendor_map">Vendor map (sponsored strip)</option>
                               <option value="sidebar">Sidebar</option>
                               <option value="bottom">Bottom</option>
                               <option value="popup">Popup</option>
@@ -1418,15 +1496,41 @@ export default function AdminAdsPage() {
                             />
                           </div>
                           <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Advertiser *</label>
-                            <input 
-                              type="text" 
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Advertiser (Vendor) *</label>
+                            <input
+                              type="text"
+                              list="vendor-options-edit"
                               value={editingAd.advertiser}
-                              onChange={(e) => setEditingAd(prev => prev ? { ...prev, advertiser: e.target.value } : null)}
+                              onChange={(e) => {
+                                const advertiser = e.target.value;
+                                const selectedVendor = vendors.find(
+                                  (v) =>
+                                    v.name.toLowerCase() === advertiser.toLowerCase() ||
+                                    `${v.name} (${v.email})`.toLowerCase() === advertiser.toLowerCase(),
+                                );
+                                setEditingAd((prev) =>
+                                  prev
+                                    ? {
+                                        ...prev,
+                                        advertiser,
+                                        vendorId: selectedVendor?.id || prev.vendorId,
+                                        advertiserEmail: selectedVendor?.email || prev.advertiserEmail,
+                                        category: selectedVendor?.category || prev.category,
+                                      }
+                                    : null,
+                                );
+                              }}
                               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                              placeholder="Enter advertiser name"
+                              placeholder="Type vendor name to search..."
                               required
                             />
+                            <datalist id="vendor-options-edit">
+                              {vendors.map((vendor) => (
+                                <option key={vendor.id} value={vendor.name}>
+                                  {vendor.email}
+                                </option>
+                              ))}
+                            </datalist>
                           </div>
                         </div>
                         
@@ -1504,6 +1608,7 @@ export default function AdminAdsPage() {
                               required
                             >
                               <option value="top">Top</option>
+                              <option value="vendor_map">Vendor map (sponsored strip)</option>
                               <option value="sidebar">Sidebar</option>
                               <option value="bottom">Bottom</option>
                               <option value="popup">Popup</option>
@@ -1634,24 +1739,33 @@ export default function AdminAdsPage() {
                     clicks immediately).
                   </p>
                   <label className="mt-4 block text-sm font-medium text-gray-700">Campaign (advertiser wallet)</label>
-                  <select
-                    className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                    value={addFundsForAd.id}
+                  <input
+                    type="text"
+                    list="campaign-options-add-funds"
+                    value={addFundsCampaignQuery}
                     onChange={(e) => {
-                      const next = bannerAds.find((a) => a.id === e.target.value);
+                      const q = e.target.value;
+                      setAddFundsCampaignQuery(q);
+                      const next = bannerAds.find(
+                        (a) =>
+                          `${a.title} — ${a.advertiser}`.toLowerCase() === q.toLowerCase() ||
+                          a.title.toLowerCase() === q.toLowerCase(),
+                      );
                       if (next) {
                         setAddFundsForAd(next);
                         setError(null);
                       }
                     }}
-                  >
+                    className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    placeholder="Type to search campaign..."
+                  />
+                  <datalist id="campaign-options-add-funds">
                     {bannerAds.map((ad) => (
-                      <option key={ad.id} value={ad.id} disabled={!bannerAdHasWalletTarget(ad)}>
-                        {ad.title} — {ad.advertiser}
-                        {!bannerAdHasWalletTarget(ad) ? ' (set vendor id or email in Edit)' : ''}
+                      <option key={ad.id} value={`${ad.title} — ${ad.advertiser}`}>
+                        {!bannerAdHasWalletTarget(ad) ? 'Needs vendor/email link' : ''}
                       </option>
                     ))}
-                  </select>
+                  </datalist>
                   <p className="mt-2 text-xs text-gray-600">
                     <span className="font-medium">Wallet target:</span>{' '}
                     {addFundsForAd.advertiserEmail ||

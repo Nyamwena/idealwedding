@@ -78,9 +78,14 @@ export async function GET(request: NextRequest) {
       await writeAdvertisements(advertisements);
     }
 
+    const publicAds = ranked.map((ad: any) => {
+      const { canServePaidClick, availableAdFunds, availableCredits, ...rest } = ad;
+      return rest;
+    });
+
     return NextResponse.json({
       success: true,
-      data: ranked,
+      data: publicAds,
     });
   } catch (error) {
     console.error('Error in GET /api/advertisements:', error);

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readDataFile, writeDataFile } from '@/lib/dataFileStore';
 import { getVendorSession } from '@/lib/vendorSession';
 import { appendVendorNotification } from '@/lib/vendorNotificationsStore';
-import { leadBelongsToVendor } from '@/lib/vendorLeadScope';
+import { findVendorBySessionEmail, leadBelongsToVendor } from '@/lib/vendorLeadScope';
 import { settleOutstandingLeadCredits } from '@/lib/vendorLeadCreditSettlement';
 import { newVendorWalletBalanceFields } from '@/lib/vendorWalletStarter';
 
@@ -45,9 +45,11 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    await settleOutstandingLeadCredits(session);
+    const vendors = await readVendors();
+    const catalogVendor = findVendorBySessionEmail(vendors, session);
+    await settleOutstandingLeadCredits(session, catalogVendor);
     const data = await readLeads();
-    const scoped = data.filter((lead: any) => leadBelongsToVendor(lead, session));
+    const scoped = data.filter((lead: any) => leadBelongsToVendor(lead, session, catalogVendor));
 
     return NextResponse.json({
       success: true,
@@ -211,11 +213,11 @@ export async function PUT(request: NextRequest) {
 
     const body = await request.json();
     const { leadId, status } = body;
-    const data = await readLeads();
-    
+    const [data, vendors] = await Promise.all([readLeads(), readVendors()]);
+    const catalogVendor = findVendorBySessionEmail(vendors, session);
     // Find and update the lead
     const leadIndex = data.findIndex(
-      (lead: any) => lead.id === leadId && leadBelongsToVendor(lead, session),
+      (lead: any) => lead.id === leadId && leadBelongsToVendor(lead, session, catalogVendor),
     );
     if (leadIndex !== -1) {
       data[leadIndex].status = status;

@@ -42,8 +42,10 @@ export default function AdminVendorsPage() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
-
-
+  const [passwordVendor, setPasswordVendor] = useState<MockVendor | null>(null);
+  const [newVendorPassword, setNewVendorPassword] = useState('');
+  const [confirmVendorPassword, setConfirmVendorPassword] = useState('');
+  const [passwordSaving, setPasswordSaving] = useState(false);
 
   useEffect(() => {
     loadVendors();
@@ -71,13 +73,30 @@ export default function AdminVendorsPage() {
     router.push('/');
   };
 
-  const filteredVendors = vendors.filter(vendor => {
-    const matchesSearch = vendor.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         vendor.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         vendor.category.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || vendor.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+  const filteredVendors = useMemo(() => {
+    const filtered = vendors.filter((vendor) => {
+      const matchesSearch = vendor.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           vendor.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           vendor.category.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesStatus = statusFilter === 'all' || vendor.status === statusFilter;
+      return matchesSearch && matchesStatus;
+    });
+
+    // Newest vendors first (latest joined date, then id desc as fallback).
+    return filtered.sort((a, b) => {
+      const dateA = Date.parse(String(a.joinedDate || ''));
+      const dateB = Date.parse(String(b.joinedDate || ''));
+      if (Number.isFinite(dateA) && Number.isFinite(dateB) && dateA !== dateB) {
+        return dateB - dateA;
+      }
+      const idA = Number(a.id);
+      const idB = Number(b.id);
+      if (Number.isFinite(idA) && Number.isFinite(idB) && idA !== idB) {
+        return idB - idA;
+      }
+      return String(b.id).localeCompare(String(a.id));
+    });
+  }, [vendors, searchTerm, statusFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filteredVendors.length / itemsPerPage));
   const paginatedVendors = useMemo(() => {
@@ -204,6 +223,46 @@ export default function AdminVendorsPage() {
     setShowVendorModal(true);
   };
 
+  const openPasswordModal = (vendor: MockVendor) => {
+    setPasswordVendor(vendor);
+    setNewVendorPassword('');
+    setConfirmVendorPassword('');
+  };
+
+  const handleSubmitVendorPassword = async () => {
+    if (!passwordVendor) return;
+    if (newVendorPassword.length < 8) {
+      alert('Password must be at least 8 characters.');
+      return;
+    }
+    if (newVendorPassword !== confirmVendorPassword) {
+      alert('Passwords do not match.');
+      return;
+    }
+
+    try {
+      setPasswordSaving(true);
+      const response = await fetch(`/api/admin/vendors/${passwordVendor.id}/password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newPassword: newVendorPassword }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to reset password');
+      }
+      setPasswordVendor(null);
+      setNewVendorPassword('');
+      setConfirmVendorPassword('');
+      setSuccessMessage(`Password updated for ${passwordVendor.name}. They can sign in with the new password.`);
+      setTimeout(() => setSuccessMessage(null), 5000);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to reset password');
+    } finally {
+      setPasswordSaving(false);
+    }
+  };
+
   const handleAddCredits = async (vendor: MockVendor) => {
     const amountInput = window.prompt(`Add credits to ${vendor.name}. Enter amount:`, '50');
     if (!amountInput) return;
@@ -260,7 +319,12 @@ export default function AdminVendorsPage() {
         <div className="flex justify-between items-center mb-8">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 mb-2">Vendor Management</h1>
-            <p className="text-gray-600">Manage vendors, view analytics, and control vendor accounts</p>
+            <p className="text-gray-600">Manage vendors, view analytics, and control vendor accounts.</p>
+            <p className="text-sm text-gray-500 mt-2">
+              To reset a forgotten vendor login, use <strong className="text-gray-700">Change password</strong> in the
+              row actions, or open <strong className="text-gray-700">View</strong> and use{' '}
+              <strong className="text-gray-700">Change login password</strong>.
+            </p>
           </div>
           <div className="flex space-x-3">
             <Link href="/admin/credits" className="btn-outline">
@@ -401,20 +465,29 @@ export default function AdminVendorsPage() {
                         {vendor.subscription}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex space-x-2">
+                    <td className="px-6 py-4 text-sm font-medium align-top min-w-[12rem]">
+                      <div className="flex flex-wrap gap-x-3 gap-y-1.5">
                         <button 
                           onClick={() => handleViewVendor(vendor)}
-                          className="text-primary-600 hover:text-primary-900"
+                          className="text-primary-600 hover:text-primary-900 shrink-0"
                         >
                           View
                         </button>
                         <button
                           onClick={() => handleAddCredits(vendor)}
                           disabled={actionLoading === vendor.id}
-                          className={`text-indigo-600 hover:text-indigo-900 ${actionLoading === vendor.id ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          className={`text-indigo-600 hover:text-indigo-900 shrink-0 ${actionLoading === vendor.id ? 'opacity-50 cursor-not-allowed' : ''}`}
                         >
                           {actionLoading === vendor.id ? 'Processing...' : 'Add Credits'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openPasswordModal(vendor)}
+                          disabled={passwordSaving}
+                          className="text-amber-700 hover:text-amber-900 disabled:opacity-50 shrink-0 font-semibold"
+                          title="Set a new login password if the vendor forgot theirs"
+                        >
+                          Change password
                         </button>
                         {vendor.status === 'pending' && (
                           <>
@@ -504,6 +577,74 @@ export default function AdminVendorsPage() {
         </div>
 
         {/* Vendor Detail Modal */}
+        {passwordVendor && (
+          <div className="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true">
+            <div className="flex min-h-screen items-center justify-center px-4 pt-4 pb-20 text-center sm:p-0">
+              <button
+                type="button"
+                className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
+                aria-label="Close"
+                onClick={() => !passwordSaving && setPasswordVendor(null)}
+              />
+              <div className="relative inline-block w-full max-w-md transform overflow-hidden rounded-lg bg-white p-6 text-left shadow-xl">
+                <h3 className="text-lg font-medium text-gray-900 mb-1">
+                  Change password — {passwordVendor.name}
+                </h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Set a new login password for <span className="font-medium">{passwordVendor.email}</span>.
+                  Share it securely with the vendor.
+                </p>
+                <div className="space-y-3">
+                  <div>
+                    <label htmlFor="new-vendor-password" className="block text-sm font-medium text-gray-700 mb-1">
+                      New password
+                    </label>
+                    <input
+                      id="new-vendor-password"
+                      type="password"
+                      autoComplete="new-password"
+                      value={newVendorPassword}
+                      onChange={(e) => setNewVendorPassword(e.target.value)}
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:ring-primary-500"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="confirm-vendor-password" className="block text-sm font-medium text-gray-700 mb-1">
+                      Confirm password
+                    </label>
+                    <input
+                      id="confirm-vendor-password"
+                      type="password"
+                      autoComplete="new-password"
+                      value={confirmVendorPassword}
+                      onChange={(e) => setConfirmVendorPassword(e.target.value)}
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:ring-primary-500"
+                    />
+                  </div>
+                </div>
+                <div className="mt-6 flex justify-end gap-3">
+                  <button
+                    type="button"
+                    className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                    disabled={passwordSaving}
+                    onClick={() => setPasswordVendor(null)}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-md border border-transparent bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
+                    disabled={passwordSaving}
+                    onClick={() => void handleSubmitVendorPassword()}
+                  >
+                    {passwordSaving ? 'Saving…' : 'Update password'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {showVendorModal && selectedVendor && (
           <div className="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
             <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
@@ -550,13 +691,42 @@ export default function AdminVendorsPage() {
                         <h4 className="font-semibold text-gray-900 mb-3">Description</h4>
                         <p className="text-sm text-gray-600">{selectedVendor.description}</p>
                       </div>
+                      <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4">
+                        <h4 className="font-semibold text-gray-900 mb-1">Vendor login</h4>
+                        <p className="text-sm text-gray-600 mb-3">
+                          Set a new password if they forgot it. This updates the account for{' '}
+                          <span className="font-medium text-gray-800">{selectedVendor.email}</span>.
+                        </p>
+                        <button
+                          type="button"
+                          className="inline-flex items-center justify-center rounded-md border border-amber-300 bg-white px-4 py-2 text-sm font-semibold text-amber-900 shadow-sm hover:bg-amber-100"
+                          onClick={() => {
+                            const v = selectedVendor;
+                            setShowVendorModal(false);
+                            openPasswordModal(v);
+                          }}
+                        >
+                          Change login password
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
-                <div className="bg-gray-50 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6">
+                <div className="bg-gray-50 px-4 py-3 sm:flex sm:flex-row sm:justify-end sm:gap-3 sm:px-6">
                   <button
                     type="button"
-                    className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-primary-600 text-base font-medium text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 sm:ml-3 sm:w-auto sm:text-sm"
+                    className="w-full inline-flex justify-center rounded-md border border-amber-300 bg-white px-4 py-2 text-sm font-semibold text-amber-900 shadow-sm hover:bg-amber-50 sm:w-auto"
+                    onClick={() => {
+                      const v = selectedVendor;
+                      setShowVendorModal(false);
+                      openPasswordModal(v);
+                    }}
+                  >
+                    Change login password
+                  </button>
+                  <button
+                    type="button"
+                    className="mt-2 w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-primary-600 text-base font-medium text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 sm:mt-0 sm:w-auto sm:text-sm"
                     onClick={() => setShowVendorModal(false)}
                   >
                     Close

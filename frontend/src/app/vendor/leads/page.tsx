@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useState } from 'react';
 import toast from 'react-hot-toast';
 import { useVendorLeads } from '@/hooks/useVendorLeads';
 import { useVendorCredits } from '@/hooks/useVendorCredits';
@@ -23,6 +24,13 @@ export default function VendorLeadsPage() {
   } = useVendorLeads();
 
   const loading = leadsLoading || creditsLoading;
+  const [selectedLead, setSelectedLead] = useState<(typeof leads)[number] | null>(null);
+  const [showLeadPreview, setShowLeadPreview] = useState(false);
+  const [showReplyModal, setShowReplyModal] = useState(false);
+  const [replySubmitting, setReplySubmitting] = useState(false);
+  const [replyAmount, setReplyAmount] = useState('');
+  const [replyDescription, setReplyDescription] = useState('');
+  const [replyNotes, setReplyNotes] = useState('');
 
   const statusBadge = (status: string) => {
     const c =
@@ -36,6 +44,66 @@ export default function VendorLeadsPage() {
               ? 'bg-purple-100 text-purple-800'
               : 'bg-red-100 text-red-800';
     return `inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${c}`;
+  };
+
+  const openLeadPreview = (lead: (typeof leads)[number]) => {
+    setSelectedLead(lead);
+    setShowLeadPreview(true);
+  };
+
+  const openReplyModal = (lead: (typeof leads)[number]) => {
+    setSelectedLead(lead);
+    setReplyAmount(
+      Number.isFinite(Number(lead.budget)) && Number(lead.budget) > 0
+        ? String(Math.round(Number(lead.budget)))
+        : '',
+    );
+    setReplyDescription(
+      `Quote for ${lead.serviceCategory} service.\n\nScope based on your request: ${lead.description || 'Details to be confirmed.'}`,
+    );
+    setReplyNotes('');
+    setShowReplyModal(true);
+  };
+
+  const submitReplyQuote = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedLead) return;
+    const amount = Number(replyAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast.error('Please enter a valid quote amount.');
+      return;
+    }
+    if (!replyDescription.trim()) {
+      toast.error('Please add a quote description.');
+      return;
+    }
+
+    setReplySubmitting(true);
+    try {
+      const response = await fetch('/api/vendor/quotes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          leadId: selectedLead.id,
+          amount,
+          description: replyDescription.trim(),
+          notes: replyNotes.trim(),
+        }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result?.success) {
+        throw new Error(result?.error || 'Failed to create quote');
+      }
+
+      await updateLeadStatus(selectedLead.id, 'quoted');
+      setShowReplyModal(false);
+      toast.success('Reply sent. Quote has been created for this request.');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to send reply');
+    } finally {
+      setReplySubmitting(false);
+    }
   };
 
   return (
@@ -186,10 +254,24 @@ export default function VendorLeadsPage() {
                               ))}
                             </select>
                             <Link
-                              href="/vendor/quotes"
+                              href="#"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                openLeadPreview(lead);
+                              }}
+                              className="text-xs font-medium text-gray-700 hover:underline"
+                            >
+                              View request
+                            </Link>
+                            <Link
+                              href="#"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                openReplyModal(lead);
+                              }}
                               className="text-xs font-medium text-primary-600 hover:underline"
                             >
-                              Create quote →
+                              Reply to request →
                             </Link>
                           </div>
                         </td>
@@ -201,6 +283,128 @@ export default function VendorLeadsPage() {
           </div>
         )}
       </main>
+
+      {showLeadPreview && selectedLead && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4" role="dialog" aria-modal="true">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/40"
+            aria-label="Close request preview"
+            onClick={() => setShowLeadPreview(false)}
+          />
+          <div
+            className="relative z-10 w-full max-w-2xl rounded-2xl bg-white p-6 shadow-xl max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-xl font-bold text-gray-900">Request details</h3>
+            <p className="mt-1 text-sm text-gray-600">Preview full inquiry information before replying.</p>
+
+            <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+              <div><span className="font-semibold text-gray-800">Couple:</span> {selectedLead.coupleName}</div>
+              <div><span className="font-semibold text-gray-800">Email:</span> {selectedLead.coupleEmail || '—'}</div>
+              <div><span className="font-semibold text-gray-800">Phone:</span> {selectedLead.couplePhone || '—'}</div>
+              <div><span className="font-semibold text-gray-800">Service:</span> {selectedLead.serviceCategory || '—'}</div>
+              <div><span className="font-semibold text-gray-800">Wedding Date:</span> {selectedLead.weddingDate || '—'}</div>
+              <div><span className="font-semibold text-gray-800">Location:</span> {selectedLead.location || '—'}</div>
+              <div><span className="font-semibold text-gray-800">Budget:</span> {selectedLead.budget ? `$${Number(selectedLead.budget).toLocaleString()}` : '—'}</div>
+              <div><span className="font-semibold text-gray-800">Received:</span> {new Date(selectedLead.timestamp).toLocaleString()}</div>
+            </div>
+
+            <div className="mt-4">
+              <p className="text-sm font-semibold text-gray-800 mb-1">Description</p>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700 whitespace-pre-wrap">
+                {selectedLead.description || 'No additional description provided.'}
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button type="button" className="btn-outline" onClick={() => setShowLeadPreview(false)}>
+                Close
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => {
+                  setShowLeadPreview(false);
+                  openReplyModal(selectedLead);
+                }}
+              >
+                Reply now
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showReplyModal && selectedLead && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4" role="dialog" aria-modal="true">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/40"
+            aria-label="Close reply modal"
+            onClick={() => setShowReplyModal(false)}
+          />
+          <form
+            onSubmit={submitReplyQuote}
+            className="relative z-10 w-full max-w-2xl rounded-2xl bg-white p-6 shadow-xl max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-xl font-bold text-gray-900">Reply to request</h3>
+            <p className="mt-1 text-sm text-gray-600">
+              Send your quote to <span className="font-semibold">{selectedLead.coupleName}</span> for{' '}
+              <span className="font-semibold">{selectedLead.serviceCategory || 'service request'}</span>.
+            </p>
+
+            <div className="mt-5 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Quote amount *</label>
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  className="input w-full"
+                  value={replyAmount}
+                  onChange={(e) => setReplyAmount(e.target.value)}
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Reply description *</label>
+                <textarea
+                  className="input w-full min-h-[120px]"
+                  value={replyDescription}
+                  onChange={(e) => setReplyDescription(e.target.value)}
+                  placeholder="Describe the quote offer and what is included..."
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Notes (optional)</label>
+                <textarea
+                  className="input w-full min-h-[90px]"
+                  value={replyNotes}
+                  onChange={(e) => setReplyNotes(e.target.value)}
+                  placeholder="Any additional notes for this quote"
+                />
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                className="btn-outline"
+                onClick={() => setShowReplyModal(false)}
+                disabled={replySubmitting}
+              >
+                Cancel
+              </button>
+              <button type="submit" className="btn-primary" disabled={replySubmitting}>
+                {replySubmitting ? 'Sending…' : 'Send reply'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
       <Footer />
     </div>
   );

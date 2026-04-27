@@ -6,6 +6,10 @@ function readAdvertisements() {
   return readDataFile<any>('advertisements.json', { bannerAds: [], adSenseConfig: null });
 }
 
+function readVendors() {
+  return readDataFile<any[]>('vendors.json', []);
+}
+
 // Helper function to write advertisements
 function writeAdvertisements(data: any) {
   return writeDataFile('advertisements.json', data);
@@ -41,7 +45,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     const body = await request.json();
     const { action, ...data } = body;
     
-    const advertisements = await readAdvertisements();
+    const [advertisements, vendors] = await Promise.all([readAdvertisements(), readVendors()]);
     const adIndex = advertisements.bannerAds.findIndex((a: any) => a.id === params.id);
     
     if (adIndex === -1) {
@@ -62,6 +66,12 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
             error: 'Status is required for update_status action'
           }, { status: 400 });
         }
+        if (String(data.status) === 'active' && !String(ad.vendorId || '').trim()) {
+          return NextResponse.json({
+            success: false,
+            error: 'Ad cannot be active without a linked vendor'
+          }, { status: 400 });
+        }
         ad.status = data.status;
         ad.updatedAt = new Date().toISOString();
         break;
@@ -74,11 +84,46 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
         break;
         
       case 'update_details':
+        if (data.vendorId !== undefined) {
+          const vendorId = String(data.vendorId || '').trim();
+          if (!vendorId) {
+            return NextResponse.json({
+              success: false,
+              error: 'vendorId is required. Ads must be linked to a vendor.'
+            }, { status: 400 });
+          }
+          const vendor = vendors.find((v: any) => String(v.id) === vendorId);
+          if (!vendor) {
+            return NextResponse.json({
+              success: false,
+              error: 'Linked vendor not found'
+            }, { status: 400 });
+          }
+          data.vendorId = vendorId;
+          if (!data.advertiser) data.advertiser = String(vendor.name || '');
+          if (!data.advertiserEmail) data.advertiserEmail = String(vendor.email || '');
+          if (!data.category) data.category = String(vendor.category || '');
+        }
         Object.keys(data).forEach(key => {
           if (data[key] !== undefined) {
             ad[key] = data[key];
           }
         });
+        if (!String(ad.vendorId || '').trim()) {
+          return NextResponse.json({
+            success: false,
+            error: 'vendorId is required. Ads must be linked to a vendor.'
+          }, { status: 400 });
+        }
+        if (String(ad.status) === 'active') {
+          const linkedVendor = vendors.find((v: any) => String(v.id) === String(ad.vendorId));
+          if (!linkedVendor) {
+            return NextResponse.json({
+              success: false,
+              error: 'Active ad has invalid vendor link'
+            }, { status: 400 });
+          }
+        }
         ad.updatedAt = new Date().toISOString();
         break;
         

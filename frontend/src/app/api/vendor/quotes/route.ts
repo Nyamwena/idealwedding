@@ -1,15 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { readDataFile, writeDataFile } from '@/lib/dataFileStore';
+import { readDataFile } from '@/lib/dataFileStore';
 import { getVendorSession } from '@/lib/vendorSession';
-import { leadBelongsToVendor } from '@/lib/vendorLeadScope';
-
-function readQuotes() {
-  return readDataFile<any[]>('quotes.json', []);
-}
-
-function writeQuotes(quotes: any[]) {
-  return writeDataFile('quotes.json', quotes);
-}
+import { findVendorBySessionEmail, leadBelongsToVendor } from '@/lib/vendorLeadScope';
+import { readQuotesArray, writeQuotesArray, readQuoteRequestsArray } from '@/lib/quotesData';
 
 function readLeads() {
   return readDataFile<any[]>('vendor-leads.json', []);
@@ -26,13 +19,9 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const vendorId = session!.vendorId;
-    const quotes = await readQuotes();
-    const scoped = quotes.filter(
-      (q: any) =>
-        String(q.vendorUserId || '') === vendorUserId ||
-        String(q.vendorId || '') === vendorId
-    );
+    const [quotes, vendors] = await Promise.all([readQuotesArray(), readDataFile<any[]>('vendors.json', [])]);
+    const catalogVendor = findVendorBySessionEmail(vendors, session!);
+    const scoped = quotes.filter((q: any) => leadBelongsToVendor(q, session!, catalogVendor));
 
     return NextResponse.json({ success: true, data: scoped });
   } catch (error) {
@@ -56,42 +45,87 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { leadId, amount, description, notes } = body;
+    const quoteRequestId = String(body?.quoteRequestId || '').trim();
+    const leadId = String(body?.leadId || '').trim();
+    const { amount, description, notes } = body;
 
-    if (!leadId || !amount || !description) {
+    if (!amount || !description) {
       return NextResponse.json(
-        { success: false, error: 'leadId, amount and description are required' },
+        { success: false, error: 'amount and description are required' },
         { status: 400 }
       );
     }
 
     const vendorId = session!.vendorId;
-    const [quotes, leads] = await Promise.all([readQuotes(), readLeads()]);
-    const lead = leads.find(
-      (l: any) => l.id === leadId && leadBelongsToVendor(l, session),
-    );
+    const [quotes, leads, vendors, qreqs] = await Promise.all([
+      readQuotesArray(),
+      readLeads(),
+      readDataFile<any[]>('vendors.json', []),
+      readQuoteRequestsArray(),
+    ]);
+    const catalogVendor = findVendorBySessionEmail(vendors, session!);
+
+    let lead: any = null;
+    let fromRequest: any = null;
+
+    if (quoteRequestId) {
+      fromRequest = qreqs.find(
+        (r: any) => String(r.id) === quoteRequestId && String(r.status || '') === 'open',
+      );
+      if (!fromRequest) {
+        return NextResponse.json(
+          { success: false, error: 'Quote request not found or already fulfilled' },
+          { status: 400 },
+        );
+      }
+    } else {
+      if (!leadId) {
+        return NextResponse.json(
+          { success: false, error: 'leadId or quoteRequestId is required' },
+          { status: 400 }
+        );
+      }
+      lead = leads.find((l: any) => l.id === leadId && leadBelongsToVendor(l, session, catalogVendor));
+      if (!lead) {
+        return NextResponse.json({ success: false, error: 'Lead not found' }, { status: 404 });
+      }
+    }
 
     const now = new Date();
-    const quote = {
+    const nowIso = now.toISOString();
+    const quote: Record<string, unknown> = {
       id: `quote_${Date.now()}`,
-      leadId,
-      coupleName: lead?.coupleName || 'Unknown Couple',
-      coupleEmail: lead?.coupleEmail || '',
-      serviceType: lead?.serviceCategory || 'Wedding Service',
-      eventDate: lead?.weddingDate || '',
-      location: lead?.location || '',
-      status: 'draft',
+      leadId: lead ? lead.id : '',
+      coupleName: lead?.coupleName || fromRequest?.customerName || 'Unknown Couple',
+      coupleEmail: lead?.coupleEmail || fromRequest?.customerEmail || '',
+      customerName: lead?.coupleName || fromRequest?.customerName || 'Unknown Couple',
+      customerEmail: lead?.coupleEmail || fromRequest?.customerEmail || '',
+      customerId: lead?.customerId
+        ? String(lead.customerId)
+        : fromRequest?.customerId
+          ? String(fromRequest.customerId)
+          : undefined,
+      serviceType: lead?.serviceCategory || fromRequest?.category || 'Wedding Service',
+      serviceCategory: fromRequest?.category || lead?.serviceCategory,
+      eventDate: lead?.weddingDate || fromRequest?.eventDate || '',
+      location: lead?.location || fromRequest?.location || '',
+      status: fromRequest ? 'sent' : 'draft',
       amount: Number(amount),
       description,
       notes: notes || '',
-      createdAt: now.toISOString(),
+      createdAt: nowIso,
       expiresAt: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString(),
       vendorUserId,
       vendorId,
     };
+    if (fromRequest) {
+      quote.quoteRequestId = String(fromRequest.id);
+      quote.sentAt = nowIso;
+      quote.updatedAt = nowIso;
+    }
 
     quotes.push(quote);
-    await writeQuotes(quotes);
+    await writeQuotesArray(quotes);
 
     return NextResponse.json({ success: true, data: quote }, { status: 201 });
   } catch (error) {

@@ -24,6 +24,8 @@ export default function AdminCreditLedgerPage() {
   const [loading, setLoading] = useState(true);
   const [transactions, setTransactions] = useState<CreditTx[]>([]);
   const [query, setQuery] = useState('');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
 
   useEffect(() => {
     const run = async () => {
@@ -45,13 +47,24 @@ export default function AdminCreditLedgerPage() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return transactions;
-    return transactions.filter((tx) =>
-      [tx.vendorName, tx.vendorEmail, tx.description, tx.type, tx.source, tx.vendorId]
-        .map((v) => String(v || '').toLowerCase())
-        .some((s) => s.includes(q)),
-    );
-  }, [transactions, query]);
+    const fromMs = fromDate ? new Date(`${fromDate}T00:00:00`).getTime() : null;
+    const toMs = toDate ? new Date(`${toDate}T23:59:59.999`).getTime() : null;
+
+    return transactions.filter((tx) => {
+      const matchesQuery =
+        !q ||
+        [tx.vendorName, tx.vendorEmail, tx.description, tx.type, tx.source, tx.vendorId]
+          .map((v) => String(v || '').toLowerCase())
+          .some((s) => s.includes(q));
+      if (!matchesQuery) return false;
+
+      const txMs = new Date(tx.timestamp || 0).getTime();
+      if (!Number.isFinite(txMs)) return false;
+      if (fromMs !== null && txMs < fromMs) return false;
+      if (toMs !== null && txMs > toMs) return false;
+      return true;
+    });
+  }, [transactions, query, fromDate, toDate]);
 
   const totals = useMemo(() => {
     let added = 0;
@@ -102,12 +115,28 @@ export default function AdminCreditLedgerPage() {
         </div>
 
         <div className="bg-white rounded-2xl shadow-lg p-4 mb-4">
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search by vendor, email, type, description..."
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-          />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search by vendor, email, type, description..."
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg md:col-span-1"
+            />
+            <input
+              type="date"
+              value={fromDate}
+              onChange={(e) => setFromDate(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+              aria-label="From date"
+            />
+            <input
+              type="date"
+              value={toDate}
+              onChange={(e) => setToDate(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+              aria-label="To date"
+            />
+          </div>
         </div>
 
         <div className="bg-white rounded-2xl shadow-lg overflow-hidden">

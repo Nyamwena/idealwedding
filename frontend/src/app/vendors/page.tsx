@@ -2,8 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
+import { postAdvertisementClick } from '@/lib/recordAdvertisementClick';
+import { markSponsoredClickPaid } from '@/lib/sponsoredSession';
+import toast from 'react-hot-toast';
 
 interface Vendor {
   id: string;
@@ -77,6 +81,7 @@ interface RankedAd {
 }
 
 export default function VendorsPage() {
+  const router = useRouter();
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [topAds, setTopAds] = useState<RankedAd[]>([]);
   const [loading, setLoading] = useState(true);
@@ -140,17 +145,13 @@ export default function VendorsPage() {
   const locations = Array.from(new Set(vendors.map(v => v.location.split(',')[1]?.trim()).filter(Boolean)));
 
   const handleAdClick = async (ad: RankedAd) => {
-    try {
-      const response = await fetch(`/api/advertisements/${ad.id}/click`, { method: 'POST' });
-      const result = await response.json();
-      if (response.ok && result.data?.targetUrl) {
-        window.open(result.data.targetUrl, '_blank', 'noopener,noreferrer');
-      } else {
-        console.warn('Ad click not opened because billing was not successful.');
-      }
-    } catch {
-      console.warn('Ad click not opened due to click tracking error.');
+    const billed = await postAdvertisementClick(ad.id);
+    if (billed.ok === false) {
+      toast.error(billed.error || 'This sponsored ad is unavailable.');
+      return;
     }
+    markSponsoredClickPaid(ad.id);
+    router.push(`/sponsored/${encodeURIComponent(ad.id)}`);
   };
 
   if (loading) {

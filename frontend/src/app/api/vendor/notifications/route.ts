@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readDataFile } from '@/lib/dataFileStore';
 import { getVendorSession } from '@/lib/vendorSession';
-import { leadBelongsToVendor } from '@/lib/vendorLeadScope';
+import { findVendorBySessionEmail, leadBelongsToVendor } from '@/lib/vendorLeadScope';
 import {
   appendVendorNotification,
   readVendorNotifications,
@@ -11,8 +11,12 @@ import {
 } from '@/lib/vendorNotificationsStore';
 
 async function readLeadsScoped(session: NonNullable<Awaited<ReturnType<typeof getVendorSession>>>) {
-  const leads = await readDataFile<any[]>('vendor-leads.json', []);
-  return leads.filter((lead: any) => leadBelongsToVendor(lead, session));
+  const [leads, vendors] = await Promise.all([
+    readDataFile<any[]>('vendor-leads.json', []),
+    readDataFile<any[]>('vendors.json', []),
+  ]);
+  const catalog = findVendorBySessionEmail(vendors, session);
+  return leads.filter((lead: any) => leadBelongsToVendor(lead, session, catalog));
 }
 
 async function syncLeadNotifications(session: NonNullable<Awaited<ReturnType<typeof getVendorSession>>>) {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readDataFile } from '@/lib/dataFileStore';
 import { getVendorSession } from '@/lib/vendorSession';
+import { findVendorBySessionEmail, bookingBelongsToVendor } from '@/lib/vendorLeadScope';
 
 function readBookings() {
   return readDataFile<any[]>('bookings.json', []);
@@ -17,13 +18,9 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const vendorId = session!.vendorId;
-    const bookings = await readBookings();
-    const scoped = bookings.filter(
-      (b: any) =>
-        String(b.vendorUserId || '') === vendorUserId ||
-        String(b.vendorId || '') === vendorId
-    );
+    const [bookings, vendors] = await Promise.all([readBookings(), readDataFile<any[]>('vendors.json', [])]);
+    const catalogVendor = findVendorBySessionEmail(vendors, session!);
+    const scoped = bookings.filter((b: any) => bookingBelongsToVendor(b, session!, catalogVendor));
 
     return NextResponse.json({ success: true, data: scoped });
   } catch (error) {

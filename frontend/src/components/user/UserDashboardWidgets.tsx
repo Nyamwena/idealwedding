@@ -2,9 +2,14 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/hooks/useAuth';
 import { useUserData, BudgetItem, SelectedVendor, Guest } from '@/hooks/useUserData';
-import { useQuoteGenerator, QuoteRequest, QuoteResponse } from '@/hooks/useQuoteGenerator';
+import { useQuoteGenerator } from '@/hooks/useQuoteGenerator';
 import { WeddingCountdown } from '@/components/user/WeddingCountdown';
+import { postAdvertisementClick } from '@/lib/recordAdvertisementClick';
+import { markSponsoredClickPaid } from '@/lib/sponsoredSession';
+import toast from 'react-hot-toast';
 
 interface UserDashboardWidgetsProps {
   userData: ReturnType<typeof useUserData>;
@@ -41,9 +46,15 @@ function formatOverviewCeremonyTime(hm?: string): string {
 }
 
 export function UserDashboardWidgets({ userData, quoteGenerator }: UserDashboardWidgetsProps) {
+  const router = useRouter();
+  const { user } = useAuth();
   const { weddingDetails, updateWeddingDetails, budgetItems, selectedVendors, guests } = userData;
-  const { quoteRequests, quoteResponses } = quoteGenerator;
+  const { quoteRequests } = quoteGenerator;
   const [topAds, setTopAds] = useState<RankedAd[]>([]);
+  const [receivedQuotationsCount, setReceivedQuotationsCount] = useState(0);
+  const [recentQuotations, setRecentQuotations] = useState<
+    { id: string; vendorName?: string; amount?: number; description?: string; createdAt?: string }[]
+  >([]);
   const [weddingFormOpen, setWeddingFormOpen] = useState(false);
   const [weddingForm, setWeddingForm] = useState({
     brideName: '',
@@ -68,9 +79,50 @@ export function UserDashboardWidgets({ userData, quoteGenerator }: UserDashboard
   const attendingGuests = guests.filter(g => g.rsvpStatus === 'attending').length;
   const pendingRSVPs = guests.filter(g => g.rsvpStatus === 'pending').length;
 
-  // Calculate quote summary
-  const pendingQuotes = quoteRequests.filter(q => q.status === 'pending').length;
-  const newResponses = quoteResponses.filter(r => r.status === 'pending').length;
+  const openQuoteRequests = quoteRequests.filter(
+    (q) => q.status === 'open' || q.status === 'pending',
+  ).length;
+
+  useEffect(() => {
+    if (!user?.id) {
+      setReceivedQuotationsCount(0);
+      setRecentQuotations([]);
+      return;
+    }
+    const ac = new AbortController();
+    (async () => {
+      try {
+        const res = await fetch('/api/user/quotes', {
+          credentials: 'include',
+          cache: 'no-store',
+          signal: ac.signal,
+        });
+        const j = await res.json();
+        if (!res.ok || !j?.success) return;
+        const rows = Array.isArray(j.data) ? j.data : [];
+        setReceivedQuotationsCount(
+          rows.filter((q: { status?: string }) => String(q.status || '').toLowerCase() === 'sent').length,
+        );
+        setRecentQuotations(
+          rows
+            .filter((q: { status?: string }) =>
+              ['sent', 'requote_requested'].includes(String(q.status || '').toLowerCase()),
+            )
+            .slice(0, 3)
+            .map((q: any) => ({
+              id: String(q.id),
+              vendorName: q.vendorName,
+              amount: Number(q.amount),
+              description: q.description,
+              createdAt: q.sentAt || q.createdAt,
+            })),
+        );
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => ac.abort();
+  }, [user?.id]);
 
   useEffect(() => {
     const loadTopAds = async () => {
@@ -146,17 +198,13 @@ export function UserDashboardWidgets({ userData, quoteGenerator }: UserDashboard
   };
 
   const handleAdClick = async (ad: RankedAd) => {
-    try {
-      const response = await fetch(`/api/advertisements/${ad.id}/click`, { method: 'POST' });
-      const result = await response.json();
-      if (response.ok && result.data?.targetUrl) {
-        window.open(result.data.targetUrl, '_blank', 'noopener,noreferrer');
-        return;
-      }
-      console.warn('Ad click not opened because billing was not successful.');
-    } catch {
-      console.warn('Ad click not opened due to click tracking error.');
+    const billed = await postAdvertisementClick(ad.id);
+    if (billed.ok === false) {
+      toast.error(billed.error || 'This sponsored ad is unavailable.');
+      return;
     }
+    markSponsoredClickPaid(ad.id);
+    router.push(`/sponsored/${encodeURIComponent(ad.id)}`);
   };
 
   return (
@@ -458,12 +506,12 @@ export function UserDashboardWidgets({ userData, quoteGenerator }: UserDashboard
               <span className="font-medium">{quoteRequests.length}</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Pending</span>
-              <span className="font-medium text-yellow-600">{pendingQuotes}</span>
+              <span className="text-gray-600">Open (vendors can quote)</span>
+              <span className="font-medium text-yellow-600">{openQuoteRequests}</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-gray-600">New Responses</span>
-              <span className="font-medium text-blue-600">{newResponses}</span>
+              <span className="text-gray-600">Quotations to review</span>
+              <span className="font-medium text-blue-600">{receivedQuotationsCount}</span>
             </div>
           </div>
         </div>
@@ -473,19 +521,21 @@ export function UserDashboardWidgets({ userData, quoteGenerator }: UserDashboard
       <div className="bg-white rounded-2xl shadow-lg p-6">
         <h2 className="text-2xl font-bold text-gray-900 mb-6">Recent Activity</h2>
         <div className="space-y-4">
-          {quoteResponses.slice(0, 3).map((response) => (
+          {recentQuotations.map((response) => (
             <div key={response.id} className="flex items-center space-x-4 p-4 bg-gray-50 rounded-xl">
               <div className="text-2xl">💬</div>
               <div className="flex-1">
                 <p className="font-semibold text-gray-900">
-                  New quote from {response.vendorName}
+                  Quotation from {response.vendorName || 'Vendor'}
                 </p>
                 <p className="text-gray-600 text-sm">
-                  ${response.price.toLocaleString()} - {response.description}
+                  ${Number(response.amount || 0).toLocaleString()} —{' '}
+                  {String(response.description || '').slice(0, 80)}
+                  {String(response.description || '').length > 80 ? '…' : ''}
                 </p>
               </div>
               <div className="text-sm text-gray-500">
-                {new Date(response.createdAt).toLocaleDateString()}
+                {response.createdAt ? new Date(response.createdAt).toLocaleDateString() : ''}
               </div>
             </div>
           ))}

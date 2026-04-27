@@ -18,6 +18,7 @@ import {
   ForgotPasswordDto,
   ResetPasswordDto,
   VerifyEmailDto,
+  AdminResetVendorPasswordDto,
 } from './dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -39,6 +40,22 @@ export class UsersController {
       success: true,
       data: user,
       message: 'User created successfully',
+    };
+  }
+
+  @Post('admin/reset-vendor-password')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Set a vendor login password (Admin only)' })
+  @ApiResponse({ status: 200, description: 'Password updated successfully' })
+  @ApiResponse({ status: 403, description: 'Account is not a vendor' })
+  @ApiResponse({ status: 404, description: 'No user for this email' })
+  async adminResetVendorPassword(@Body() dto: AdminResetVendorPasswordDto) {
+    await this.usersService.adminResetVendorPasswordByEmail(dto.email, dto.newPassword);
+    return {
+      success: true,
+      message: 'Vendor password updated successfully',
     };
   }
 

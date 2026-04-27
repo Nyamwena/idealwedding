@@ -32,22 +32,12 @@ export function TestCredentials() {
       
       <div className="space-y-2 text-sm">
         <div>
-          <strong>For Testing:</strong>
-        </div>
-        <div>
-          <strong>Regular User:</strong> Any email/password
-        </div>
-        <div>
-          <strong>Admin User:</strong> admin@idealweddings.com / any password
-        </div>
-        <div>
-          <strong>Vendor User:</strong> vendor@example.com / any password
-        </div>
-        <div className="text-xs text-gray-600 mt-2">
-          The system will accept any email/password combination for testing purposes.
+          <strong>Local login</strong> uses the <strong>auth service + MySQL</strong> (<code className="text-xs">user</code>{' '}
+          table). There is no “any password” bypass — the account must exist and the password must match the stored hash.
         </div>
         <div className="text-xs text-gray-600">
-          Role is determined by email content (admin/vendor keywords)
+          If login fails: confirm auth is running on port 3002, <code className="text-xs">DATABASE_URL</code> points at your
+          DB, and this email exists in <code className="text-xs">user</code> (or register a new account).
         </div>
       </div>
     </div>

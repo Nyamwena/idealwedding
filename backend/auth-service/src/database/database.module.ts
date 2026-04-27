@@ -8,11 +8,16 @@ import { TypeOrmModule } from '@nestjs/typeorm';
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => {
         const databaseUrl = configService.get<string>('DATABASE_URL', 'postgresql://idealweddings:idealweddings123@localhost:5432/idealweddings');
-        
+
+        // Auto-sync schema in dev breaks when a `user` table already exists (MySQL naming / shared DB).
+        // Opt in with TYPEORM_SYNCHRONIZE=true only on a fresh local database.
+        const syncFlag = configService.get<string>('TYPEORM_SYNCHRONIZE', 'false').toLowerCase();
+        const synchronize = syncFlag === 'true';
+
         // Parse database URL to determine type
         let config: any = {
           entities: [__dirname + '/../**/*.entity{.ts,.js}'],
-          synchronize: configService.get<string>('NODE_ENV') === 'development',
+          synchronize,
           logging: configService.get<string>('NODE_ENV') === 'development',
         };
 

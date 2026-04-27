@@ -15,6 +15,10 @@ function readAdvertisements() {
   });
 }
 
+function readVendors() {
+  return readDataFile<any[]>('vendors.json', []);
+}
+
 function readClickEvents() {
   return readDataFile<any[]>('advertisement-click-events.json', []);
 }
@@ -186,5 +190,93 @@ export async function GET(request: NextRequest) {
       { success: false, error: 'Failed to fetch advertisements' },
       { status: 500 },
     );
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const type = String(body?.type || '');
+    const advertisements = await readAdvertisements();
+
+    if (type === 'adSenseConfig') {
+      const nextConfig = normalizeAdSenseConfig({
+        ...advertisements.adSenseConfig,
+        ...body,
+      });
+      const nextPayload = {
+        ...advertisements,
+        adSenseConfig: {
+          ...nextConfig,
+          lastUpdated: new Date().toISOString(),
+        },
+      };
+      await writeDataFile('advertisements.json', nextPayload);
+      return NextResponse.json({ success: true, data: nextPayload.adSenseConfig });
+    }
+
+    if (type !== 'bannerAd') {
+      return NextResponse.json({ success: false, error: 'Invalid type parameter' }, { status: 400 });
+    }
+
+    const vendors = await readVendors();
+    const vendorId = String(body.vendorId || '').trim();
+    if (!vendorId) {
+      return NextResponse.json(
+        { success: false, error: 'vendorId is required. Ads must be linked to a vendor.' },
+        { status: 400 },
+      );
+    }
+    const vendor = vendors.find((v: any) => String(v.id) === vendorId);
+    if (!vendor) {
+      return NextResponse.json({ success: false, error: 'Linked vendor not found' }, { status: 400 });
+    }
+
+    const title = String(body.title || '').trim();
+    const imageUrl = String(body.imageUrl || '').trim();
+    const targetUrl = String(body.targetUrl || '').trim();
+    const advertiser = String(body.advertiser || vendor.name || '').trim();
+    const category = String(body.category || vendor.category || '').trim();
+    if (!title || !imageUrl || !targetUrl || !advertiser || !category) {
+      return NextResponse.json(
+        { success: false, error: 'title, imageUrl, targetUrl, advertiser, category are required' },
+        { status: 400 },
+      );
+    }
+
+    const now = new Date().toISOString();
+    const ad = {
+      id: String(body.id || `a${Date.now()}`),
+      title,
+      imageUrl,
+      targetUrl,
+      position: String(body.position || 'top'),
+      status: String(body.status || 'inactive'),
+      startDate: String(body.startDate || '').trim(),
+      endDate: String(body.endDate || '').trim(),
+      clicks: Number(body.clicks || 0),
+      impressions: Number(body.impressions || 0),
+      ctr: Number(body.ctr || 0),
+      cost: Number(body.cost || 0),
+      bidPerClick: Number(body.bidPerClick ?? body.cost ?? 0),
+      maxDailyBudget: Number(body.maxDailyBudget || 0),
+      totalSpent: Number(body.totalSpent || 0),
+      advertiser,
+      advertiserEmail: String(body.advertiserEmail || vendor.email || '').trim(),
+      category,
+      vendorId,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    const nextPayload = {
+      ...advertisements,
+      bannerAds: [...(advertisements.bannerAds || []), ad],
+    };
+    await writeDataFile('advertisements.json', nextPayload);
+    return NextResponse.json({ success: true, data: ad, message: 'Banner ad created successfully' });
+  } catch (error) {
+    console.error('Error in POST /api/admin/advertisements:', error);
+    return NextResponse.json({ success: false, error: 'Failed to save advertisement data' }, { status: 500 });
   }
 }

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readDataFile } from '@/lib/dataFileStore';
 import { getVendorSession } from '@/lib/vendorSession';
-import { leadBelongsToVendor } from '@/lib/vendorLeadScope';
+import { findVendorBySessionEmail, leadBelongsToVendor } from '@/lib/vendorLeadScope';
 import { findVendorProfile } from '@/lib/vendorProfileScope';
 
 // Helper to read vendor leads from file
@@ -43,16 +43,18 @@ export async function GET(request: NextRequest) {
     const vendorId = session!.vendorId;
 
     // Get all data
-    const [allLeads, allBookings, allPayments, vendorProfiles] = await Promise.all([
+    const [allLeads, allBookings, allPayments, vendorProfiles, vendors] = await Promise.all([
       getVendorLeads(),
       getBookings(),
       getPayments(),
       getVendorProfiles(),
+      readDataFile<any[]>('vendors.json', []),
     ]);
+    const catalogVendor = findVendorBySessionEmail(vendors, session!);
 
     // Filter data for this vendor
     const vendorLeads = allLeads.filter((lead: any) =>
-      leadBelongsToVendor(lead, session!),
+      leadBelongsToVendor(lead, session!, catalogVendor),
     );
     const vendorBookings = allBookings.filter(
       (booking: any) =>

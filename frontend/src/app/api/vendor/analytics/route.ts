@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readDataFile } from '@/lib/dataFileStore';
 import { getVendorSession } from '@/lib/vendorSession';
-import { findVendorBySessionEmail, leadBelongsToVendor } from '@/lib/vendorLeadScope';
+import { findVendorBySessionEmail, leadBelongsToVendor, bookingBelongsToVendor } from '@/lib/vendorLeadScope';
 import { findVendorProfile } from '@/lib/vendorProfileScope';
 
 // Helper to read vendor leads from file
@@ -25,6 +25,25 @@ const getPayments = () => {
 };
 
 export const dynamic = "force-dynamic";
+
+function parseDateLike(value: unknown): Date | null {
+  if (!value) return null;
+  const d = new Date(String(value));
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function inRange(value: unknown, start: Date, endExclusive?: Date): boolean {
+  const d = parseDateLike(value);
+  if (!d) return false;
+  if (d < start) return false;
+  if (endExclusive && d >= endExclusive) return false;
+  return true;
+}
+
+function normalizeAmount(value: unknown): number {
+  const n = Number(value ?? 0);
+  return Number.isFinite(n) ? n : 0;
+}
 
 // GET /api/vendor/analytics - Get vendor analytics data
 export async function GET(request: NextRequest) {
@@ -56,16 +75,15 @@ export async function GET(request: NextRequest) {
     const vendorLeads = allLeads.filter((lead: any) =>
       leadBelongsToVendor(lead, session!, catalogVendor),
     );
-    const vendorBookings = allBookings.filter(
-      (booking: any) =>
-        String(booking.vendorUserId || '') === vendorUserId ||
-        String(booking.vendorId || '') === vendorId,
+    const vendorBookings = allBookings.filter((booking: any) =>
+      bookingBelongsToVendor(booking, session!, catalogVendor),
     );
-    const vendorPayments = allPayments.filter(
-      (payment: any) =>
-        String(payment.vendorUserId || '') === vendorUserId ||
-        String(payment.vendorId || '') === vendorId,
-    );
+    const bookingIds = new Set(vendorBookings.map((b: any) => String(b?.id || '')).filter(Boolean));
+    const vendorPayments = allPayments.filter((payment: any) => {
+      if (leadBelongsToVendor(payment, session!, catalogVendor)) return true;
+      const paymentBookingId = String(payment?.bookingId || '');
+      return paymentBookingId ? bookingIds.has(paymentBookingId) : false;
+    });
 
     // Calculate date range based on period
     const now = new Date();
@@ -89,14 +107,14 @@ export async function GET(request: NextRequest) {
     }
 
     // Filter data by date range
-    const filteredLeads = vendorLeads.filter((lead: any) => 
-      new Date(lead.timestamp) >= startDate
+    const filteredLeads = vendorLeads.filter((lead: any) =>
+      inRange(lead.timestamp ?? lead.createdAt ?? lead.updatedAt, startDate),
     );
-    const filteredBookings = vendorBookings.filter((booking: any) => 
-      new Date(booking.createdAt) >= startDate
+    const filteredBookings = vendorBookings.filter((booking: any) =>
+      inRange(booking.createdAt ?? booking.timestamp ?? booking.updatedAt, startDate),
     );
-    const filteredPayments = vendorPayments.filter((payment: any) => 
-      new Date(payment.createdAt) >= startDate
+    const filteredPayments = vendorPayments.filter((payment: any) =>
+      inRange(payment.createdAt ?? payment.paymentDate ?? payment.date ?? payment.updatedAt, startDate),
     );
 
     // Calculate basic metrics
@@ -107,7 +125,7 @@ export async function GET(request: NextRequest) {
     // Calculate revenue from completed payments
     const totalRevenue = filteredPayments
       .filter((payment: any) => payment.status === 'completed')
-      .reduce((sum: number, payment: any) => sum + (payment.amount || 0), 0);
+      .reduce((sum: number, payment: any) => sum + normalizeAmount(payment.amount), 0);
     
     const averageBookingValue = totalBookings > 0 ? totalRevenue / totalBookings : 0;
 
@@ -126,18 +144,17 @@ export async function GET(request: NextRequest) {
     // Calculate monthly growth (compare with previous period)
     const previousStartDate = new Date(startDate.getTime() - (now.getTime() - startDate.getTime()));
     const previousLeads = vendorLeads.filter((lead: any) => 
-      new Date(lead.timestamp) >= previousStartDate && new Date(lead.timestamp) < startDate
+      inRange(lead.timestamp ?? lead.createdAt ?? lead.updatedAt, previousStartDate, startDate)
     ).length;
     const previousBookings = vendorBookings.filter((booking: any) => 
-      new Date(booking.createdAt) >= previousStartDate && new Date(booking.createdAt) < startDate
+      inRange(booking.createdAt ?? booking.timestamp ?? booking.updatedAt, previousStartDate, startDate)
     ).length;
     const previousRevenue = vendorPayments
       .filter((payment: any) => 
-        new Date(payment.createdAt) >= previousStartDate && 
-        new Date(payment.createdAt) < startDate &&
+        inRange(payment.createdAt ?? payment.paymentDate ?? payment.date ?? payment.updatedAt, previousStartDate, startDate) &&
         payment.status === 'completed'
       )
-      .reduce((sum: number, payment: any) => sum + (payment.amount || 0), 0);
+      .reduce((sum: number, payment: any) => sum + normalizeAmount(payment.amount), 0);
 
     const leadsGrowth = previousLeads > 0 ? ((totalLeads - previousLeads) / previousLeads) * 100 : 0;
     const bookingsGrowth = previousBookings > 0 ? ((totalBookings - previousBookings) / previousBookings) * 100 : 0;
@@ -157,7 +174,7 @@ export async function GET(request: NextRequest) {
           payment.serviceCategory === service.category && 
           payment.status === 'completed'
         )
-        .reduce((sum: number, payment: any) => sum + (payment.amount || 0), 0);
+        .reduce((sum: number, payment: any) => sum + normalizeAmount(payment.amount), 0);
       
       return {
         category: service.category,
@@ -175,23 +192,19 @@ export async function GET(request: NextRequest) {
       const nextMonthDate = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
       
       const monthLeads = vendorLeads.filter((lead: any) => {
-        const leadDate = new Date(lead.timestamp);
-        return leadDate >= monthDate && leadDate < nextMonthDate;
+        return inRange(lead.timestamp ?? lead.createdAt ?? lead.updatedAt, monthDate, nextMonthDate);
       }).length;
       
       const monthBookings = vendorBookings.filter((booking: any) => {
-        const bookingDate = new Date(booking.createdAt);
-        return bookingDate >= monthDate && bookingDate < nextMonthDate;
+        return inRange(booking.createdAt ?? booking.timestamp ?? booking.updatedAt, monthDate, nextMonthDate);
       }).length;
       
       const monthRevenue = vendorPayments
         .filter((payment: any) => {
-          const paymentDate = new Date(payment.createdAt);
-          return paymentDate >= monthDate && 
-                 paymentDate < nextMonthDate && 
+          return inRange(payment.createdAt ?? payment.paymentDate ?? payment.date ?? payment.updatedAt, monthDate, nextMonthDate) &&
                  payment.status === 'completed';
         })
-        .reduce((sum: number, payment: any) => sum + (payment.amount || 0), 0);
+        .reduce((sum: number, payment: any) => sum + normalizeAmount(payment.amount), 0);
 
       monthlyTrends.push({
         month: monthDate.toLocaleDateString('en-US', { month: 'short' }),

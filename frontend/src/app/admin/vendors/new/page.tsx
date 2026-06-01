@@ -8,29 +8,17 @@ import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 import { AdminBreadcrumb } from '@/components/admin/AdminBreadcrumb';
 
+import { VENDOR_CATEGORY_OPTIONS } from '@/lib/vendorCategories';
+
 interface VendorFormData {
   name: string;
   email: string;
-  category: string;
+  categories: string[];
   location: string;
   phone: string;
   website: string;
   description: string;
 }
-
-const CATEGORIES = [
-  'Photography',
-  'Videography',
-  'Florist',
-  'Catering',
-  'Venue',
-  'Entertainment',
-  'Wedding Planning',
-  'Transportation',
-  'Beauty & Styling',
-  'Decorations',
-  'Other'
-];
 
 export default function AdminAddVendorPage() {
   const { user,  isAdmin, logout } = useAuth();
@@ -39,7 +27,7 @@ export default function AdminAddVendorPage() {
   const [formData, setFormData] = useState<VendorFormData>({
     name: '',
     email: '',
-    category: '',
+    categories: [],
     location: '',
     phone: '',
     website: '',
@@ -64,8 +52,8 @@ export default function AdminAddVendorPage() {
       errors.email = 'Please enter a valid email address';
     }
     
-    if (!formData.category) {
-      errors.category = 'Category is required';
+    if (!formData.categories.length) {
+      errors.categories = 'Select at least one category';
     }
     
     if (!formData.location.trim()) {
@@ -110,7 +98,11 @@ export default function AdminAddVendorPage() {
                 'Content-Type': 'application/json',
             },
             credentials: 'include',  // ← add this line
-            body: JSON.stringify(formData),
+            body: JSON.stringify({
+              ...formData,
+              category: formData.categories[0] || '',
+              categories: formData.categories,
+            }),
         });
       
       if (!response.ok) {
@@ -226,24 +218,40 @@ export default function AdminAddVendorPage() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-                  <div>
-                    <label htmlFor="category" className="block text-sm font-medium text-gray-700 mb-2">
-                      Category *
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Categories * (select all that apply)
                     </label>
-                    <select
-                      id="category"
-                      name="category"
-                      value={formData.category}
-                      onChange={handleInputChange}
-                      className={`form-select w-full ${validationErrors.category ? 'border-red-500' : ''}`}
-                    >
-                      <option value="">Select a category</option>
-                      {CATEGORIES.map(category => (
-                        <option key={category} value={category}>{category}</option>
-                      ))}
-                    </select>
-                    {validationErrors.category && (
-                      <p className="mt-1 text-sm text-red-600">{validationErrors.category}</p>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {VENDOR_CATEGORY_OPTIONS.map((category) => {
+                        const checked = formData.categories.includes(category);
+                        return (
+                          <label
+                            key={category}
+                            className="flex items-center gap-2 text-sm text-gray-700 border rounded-lg px-3 py-2 cursor-pointer"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(e) => {
+                                setFormData((prev) => ({
+                                  ...prev,
+                                  categories: e.target.checked
+                                    ? [...prev.categories, category]
+                                    : prev.categories.filter((c) => c !== category),
+                                }));
+                                if (validationErrors.categories) {
+                                  setValidationErrors((prev) => ({ ...prev, categories: '' }));
+                                }
+                              }}
+                            />
+                            {category}
+                          </label>
+                        );
+                      })}
+                    </div>
+                    {validationErrors.categories && (
+                      <p className="mt-1 text-sm text-red-600">{validationErrors.categories}</p>
                     )}
                   </div>
                   

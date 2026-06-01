@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readDataFile, writeDataFile } from '@/lib/dataFileStore';
 import { verifyToken } from '@/lib/auth';
 import { newVendorWalletBalanceFields } from '@/lib/vendorWalletStarter';
+import { normalizeCategoryList } from '@/lib/vendorCategories';
 
 const getVendors = () => readDataFile<any[]>('vendors.json', []);
 const getCreditWallets = () => readDataFile<any[]>('vendor-credit-wallets.json', []);
@@ -105,11 +106,12 @@ export async function POST(request: NextRequest) {
         if (authError) return authError;
 
         const body = await request.json();
-        const { name, email, category, location, phone, website, description } = body;
+        const { name, email, category, categories, location, phone, website, description } = body;
+        const categoryList = normalizeCategoryList(categories ?? category);
 
-        if (!name || !email || !category || !location) {
+        if (!name || !email || categoryList.length === 0 || !location) {
             return NextResponse.json(
-                { success: false, error: 'Name, email, category, and location are required' },
+                { success: false, error: 'Name, email, at least one category, and location are required' },
                 { status: 400 }
             );
         }
@@ -132,7 +134,10 @@ export async function POST(request: NextRequest) {
 
         const newVendor = {
             id: (vendors.length + 1).toString(),
-            name, email, category,
+            name,
+            email,
+            category: categoryList[0],
+            categories: categoryList,
             status: 'pending',
             location,
             rating: 0,

@@ -8,6 +8,7 @@ type Vendor = {
   name: string;
   businessName?: string;
   category?: string;
+  categories?: string[];
   location?: string;
   description?: string;
   rating?: number;
@@ -41,6 +42,11 @@ export function UserAllVendors() {
             name: String(v.name || ''),
             businessName: v.businessName ? String(v.businessName) : undefined,
             category: v.category ? String(v.category) : undefined,
+            categories: Array.isArray(v.categories)
+              ? v.categories.map((c: unknown) => String(c))
+              : v.category
+                ? [String(v.category)]
+                : [],
             location: v.location ? String(v.location) : undefined,
             description: v.description ? String(v.description) : undefined,
             rating: Number(v.rating || 0),
@@ -61,9 +67,11 @@ export function UserAllVendors() {
     () =>
       Array.from(
         new Set(
-          vendors
-            .map((v) => String(v.category || '').trim())
-            .filter((c) => c.length > 0),
+          vendors.flatMap((v) =>
+            (v.categories && v.categories.length > 0 ? v.categories : [v.category || ''])
+              .map((c) => String(c).trim())
+              .filter((c) => c.length > 0),
+          ),
         ),
       ).sort((a, b) => a.localeCompare(b)),
     [vendors],
@@ -125,11 +133,21 @@ export function UserAllVendors() {
                 <h3 className="text-lg font-semibold text-gray-900">
                   {vendor.businessName || vendor.name}
                 </h3>
-                {vendor.category && (
-                  <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
-                    {vendor.category}
-                  </span>
-                )}
+                <div className="flex flex-wrap gap-1 justify-end max-w-[55%]">
+                  {(vendor.categories && vendor.categories.length > 0
+                    ? vendor.categories
+                    : vendor.category
+                      ? [vendor.category]
+                      : []
+                  ).map((cat) => (
+                    <span
+                      key={cat}
+                      className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full"
+                    >
+                      {cat}
+                    </span>
+                  ))}
+                </div>
               </div>
               <p className="text-sm text-gray-600 mb-3 line-clamp-2">
                 {vendor.description || 'No description yet.'}

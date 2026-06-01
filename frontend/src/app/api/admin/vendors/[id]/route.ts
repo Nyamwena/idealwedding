@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readDataFile, writeDataFile } from '@/lib/dataFileStore';
 import { verifyToken } from '@/lib/auth';
+import { normalizeCategoryList } from '@/lib/vendorCategories';
+import { syncVendorProfilesApprovalForCatalogVendor } from '@/lib/vendorApprovalSync';
 
 // Read vendors from file
 const getVendors = () => {
@@ -78,23 +80,25 @@ export async function PUT(
     if (authError) return authError;
 
     const body = await request.json();
-    const { 
-      name, 
-      email, 
-      category, 
-      location, 
-      phone, 
-      website, 
+    const {
+      name,
+      email,
+      category,
+      categories,
+      location,
+      phone,
+      website,
       description,
       status,
-      subscription
+      subscription,
     } = body;
+    const categoryList = normalizeCategoryList(categories ?? category);
 
     // Validate required fields
-    if (!name || !email || !category || !location) {
+    if (!name || !email || categoryList.length === 0 || !location) {
       return NextResponse.json(
-        { success: false, error: 'Name, email, category, and location are required' },
-        { status: 400 }
+        { success: false, error: 'Name, email, at least one category, and location are required' },
+        { status: 400 },
       );
     }
 
@@ -122,7 +126,8 @@ export async function PUT(
       ...vendors[vendorIndex],
       name,
       email,
-      category,
+      category: categoryList[0],
+      categories: categoryList,
       location,
       phone: phone || vendors[vendorIndex].phone,
       website: website || vendors[vendorIndex].website,
@@ -133,6 +138,7 @@ export async function PUT(
 
     // Save to file
     await saveVendors(vendors);
+    await syncVendorProfilesApprovalForCatalogVendor(vendors[vendorIndex]);
 
     return NextResponse.json({
       success: true,

@@ -10,6 +10,7 @@ import { AdminBreadcrumb } from '@/components/admin/AdminBreadcrumb';
 import { AdminLoadingState } from '@/components/admin/AdminLoadingState';
 import { AdminErrorState } from '@/components/admin/AdminErrorState';
 import { VendorTopMenu } from '@/components/vendor/VendorTopMenu';
+import { VENDOR_CATEGORY_OPTIONS } from '@/lib/vendorCategories';
 
 export default function VendorProfilePage() {
   const { logout } = useAuth();
@@ -49,6 +50,7 @@ export default function VendorProfilePage() {
     setEditData({
       businessName: profile?.businessName || '',
       description: profile?.description || '',
+      serviceCategories: profile?.serviceCategories || [],
       contactInfo: profile?.contactInfo || {},
       businessInfo: profile?.businessInfo || {},
     });
@@ -389,7 +391,7 @@ export default function VendorProfilePage() {
                 <div>
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">Services Offered</h3>
                   <div className="space-y-2">
-                    {profile?.serviceCategories.map((category, index) => (
+                    {(profile?.serviceCategories || []).map((category, index) => (
                       <span
                         key={index}
                         className="inline-block bg-primary-100 text-primary-800 text-sm px-3 py-1 rounded-full mr-2 mb-2"
@@ -399,6 +401,9 @@ export default function VendorProfilePage() {
                     ))}
                   </div>
                   
+                  <p className="text-xs text-gray-500 mt-2">
+                    Categories also update automatically when you add services in the Services tab.
+                  </p>
                   <h4 className="text-md font-medium text-gray-900 mt-4 mb-2">Service Count</h4>
                   <p className="text-gray-600">{profile?.services.length || 0} services configured</p>
                 </div>
@@ -732,6 +737,34 @@ export default function VendorProfilePage() {
                         rows={3}
                         className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
                       />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Business categories (select all that apply)
+                      </label>
+                      <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto border border-gray-200 rounded-md p-3">
+                        {VENDOR_CATEGORY_OPTIONS.map((category) => {
+                          const selected = (editData.serviceCategories || []).includes(category);
+                          return (
+                            <label key={category} className="flex items-center gap-2 text-sm text-gray-700">
+                              <input
+                                type="checkbox"
+                                checked={selected}
+                                onChange={(e) => {
+                                  const current = editData.serviceCategories || [];
+                                  setEditData({
+                                    ...editData,
+                                    serviceCategories: e.target.checked
+                                      ? [...current, category]
+                                      : current.filter((c: string) => c !== category),
+                                  });
+                                }}
+                              />
+                              {category}
+                            </label>
+                          );
+                        })}
+                      </div>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700">Email</label>

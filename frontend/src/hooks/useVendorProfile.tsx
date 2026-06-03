@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from './useAuth';
+import { mergeProfileCategories } from '@/lib/vendorCategories';
 
 interface VendorProfile {
   id: string;
@@ -161,8 +162,11 @@ export function useVendorProfile() {
         services: [...profile.services, newService],
         lastUpdated: new Date().toISOString(),
       } : null;
+      const serviceCategories = updatedProfile
+        ? mergeProfileCategories(updatedProfile)
+        : [];
 
-      setProfile(updatedProfile);
+      setProfile(updatedProfile ? { ...updatedProfile, serviceCategories } : null);
 
       // Save to API
       const response = await fetch('/api/vendor/profile', {
@@ -173,6 +177,7 @@ export function useVendorProfile() {
         credentials: 'include',
         body: JSON.stringify({
           services: updatedProfile?.services,
+          serviceCategories,
           lastUpdated: updatedProfile?.lastUpdated,
         }),
       });
@@ -202,8 +207,11 @@ export function useVendorProfile() {
         ),
         lastUpdated: new Date().toISOString(),
       } : null;
+      const serviceCategories = updatedProfile
+        ? mergeProfileCategories(updatedProfile)
+        : [];
 
-      setProfile(updatedProfile);
+      setProfile(updatedProfile ? { ...updatedProfile, serviceCategories } : null);
 
       // Save to API
       const response = await fetch('/api/vendor/profile', {
@@ -214,6 +222,7 @@ export function useVendorProfile() {
         credentials: 'include',
         body: JSON.stringify({
           services: updatedProfile?.services,
+          serviceCategories,
           lastUpdated: updatedProfile?.lastUpdated,
         }),
       });
@@ -241,8 +250,11 @@ export function useVendorProfile() {
         services: profile.services.filter(service => service.id !== serviceId),
         lastUpdated: new Date().toISOString(),
       } : null;
+      const serviceCategories = updatedProfile
+        ? mergeProfileCategories(updatedProfile)
+        : [];
 
-      setProfile(updatedProfile);
+      setProfile(updatedProfile ? { ...updatedProfile, serviceCategories } : null);
 
       // Save to API
       const response = await fetch('/api/vendor/profile', {
@@ -253,6 +265,7 @@ export function useVendorProfile() {
         credentials: 'include',
         body: JSON.stringify({
           services: updatedProfile?.services,
+          serviceCategories,
           lastUpdated: updatedProfile?.lastUpdated,
         }),
       });

@@ -6,6 +6,7 @@ import {
   canServeSponsoredAd,
   dayKey,
 } from '@/lib/vendorAdFunds';
+import { getVendorCategories, vendorMatchesCategoryFilter } from '@/lib/vendorCategories';
 
 export const dynamic = 'force-dynamic';
 
@@ -32,17 +33,6 @@ function stableCoords(seed: string, base = { lat: 38.2975, lng: -122.2869 }): { 
     lat: base.lat + (r1 - 0.5) * 0.08,
     lng: base.lng + (r2 - 0.5) * 0.08,
   };
-}
-
-function categoryMatchesFilter(vendorCategory: string, filter: string): boolean {
-  if (filter === 'all') return true;
-  const a = (vendorCategory || '').toLowerCase();
-  const b = filter.toLowerCase();
-  if (a === b) return true;
-  if (a.includes(b) || b.includes(a)) return true;
-  if (b === 'flowers' && (a.includes('floral') || a.includes('flower'))) return true;
-  if ((b === 'venue' || b === 'venues') && a.includes('venue')) return true;
-  return false;
 }
 
 function priceRangeFromProfile(profile: any): { min: number; max: number } {
@@ -105,10 +95,12 @@ function mapToMapVendor(
   const description = profile?.description || vendor.description || '';
   const pr = priceRangeFromProfile(profile);
   const coords = stableCoords(String(vendor.id));
+  const categories = getVendorCategories(vendor, profile);
   return {
     id: String(vendor.id),
     name: businessName,
-    category: vendor.category || profile?.serviceCategories?.[0] || 'Other',
+    category: categories[0] || 'Other',
+    categories,
     location: vendor.location || '—',
     coordinates: coords,
     rating: Number(vendor.rating) || 0,
@@ -219,7 +211,8 @@ export async function GET(request: NextRequest) {
     for (const vendor of approved) {
       if (sponsoredVendorIds.has(String(vendor.id))) continue;
       const profile = profilesRaw.find((p: any) => String(p.id) === String(vendor.id)) || null;
-      if (!categoryMatchesFilter(vendor.category || '', categoryFilter)) continue;
+      const vendorCats = getVendorCategories(vendor, profile);
+      if (!vendorMatchesCategoryFilter(vendorCats, categoryFilter)) continue;
       vendors.push(
         mapToMapVendor(vendor, profile, { isSponsored: false }),
       );
@@ -228,7 +221,9 @@ export async function GET(request: NextRequest) {
     const sponsoredFiltered =
       categoryFilter === 'all'
         ? sponsored
-        : sponsored.filter((s: any) => categoryMatchesFilter(String(s.category || ''), categoryFilter));
+        : sponsored.filter((s: any) =>
+            vendorMatchesCategoryFilter(String(s.category || ''), categoryFilter),
+          );
 
     return NextResponse.json({
       success: true,

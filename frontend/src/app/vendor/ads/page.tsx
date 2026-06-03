@@ -6,6 +6,13 @@ import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 import { VendorTopMenu } from '@/components/vendor/VendorTopMenu';
 
+const REQUIRED_IMAGE_DIMS: Record<string, { width: number; height: number; label: string }> = {
+  top: { width: 1200, height: 300, label: 'Top banner' },
+  sidebar: { width: 400, height: 600, label: 'Sidebar' },
+  bottom: { width: 1200, height: 280, label: 'Bottom banner' },
+  popup: { width: 800, height: 800, label: 'Popup square' },
+};
+
 type VendorAd = {
   id: string;
   title: string;
@@ -44,12 +51,15 @@ export default function VendorAdsPage() {
   const [form, setForm] = useState({
     title: '',
     imageUrl: '',
+    imageWidth: 0,
+    imageHeight: 0,
     targetUrl: '',
     category: 'General',
     position: 'top',
     bidPerClick: 1,
     maxDailyBudget: 10,
   });
+  const [imageError, setImageError] = useState('');
 
   const load = async () => {
     setLoading(true);
@@ -79,6 +89,14 @@ export default function VendorAdsPage() {
   }, []);
 
   const createAd = async () => {
+    const required = REQUIRED_IMAGE_DIMS[form.position] || REQUIRED_IMAGE_DIMS.top;
+    if (!form.imageUrl || form.imageWidth !== required.width || form.imageHeight !== required.height) {
+      setImageError(
+        `Upload a ${required.width}x${required.height}px image for ${required.label}.`,
+      );
+      return;
+    }
+
     const response = await fetch('/api/vendor/advertisements', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -93,6 +111,8 @@ export default function VendorAdsPage() {
     setForm({
       title: '',
       imageUrl: '',
+      imageWidth: 0,
+      imageHeight: 0,
       targetUrl: '',
       category: 'General',
       position: 'top',
@@ -193,12 +213,61 @@ export default function VendorAdsPage() {
             value={form.targetUrl}
             onChange={(e) => setForm((p) => ({ ...p, targetUrl: e.target.value }))}
           />
-          <input
-            className="border rounded px-3 py-2"
-            placeholder="Image URL (optional)"
-            value={form.imageUrl}
-            onChange={(e) => setForm((p) => ({ ...p, imageUrl: e.target.value }))}
-          />
+          <div className="md:col-span-2">
+            <input
+              className="border rounded px-3 py-2 w-full"
+              type="file"
+              accept="image/*"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                const required = REQUIRED_IMAGE_DIMS[form.position] || REQUIRED_IMAGE_DIMS.top;
+                const reader = new FileReader();
+                reader.onload = () => {
+                  const img = new Image();
+                  img.onload = () => {
+                    const w = img.naturalWidth;
+                    const h = img.naturalHeight;
+                    if (w !== required.width || h !== required.height) {
+                      setImageError(
+                        `Invalid size: ${w}x${h}. Required: ${required.width}x${required.height}px for ${required.label}.`,
+                      );
+                      setForm((p) => ({ ...p, imageUrl: '', imageWidth: 0, imageHeight: 0 }));
+                      return;
+                    }
+                    setImageError('');
+                    setForm((p) => ({
+                      ...p,
+                      imageUrl: String(reader.result || ''),
+                      imageWidth: w,
+                      imageHeight: h,
+                    }));
+                  };
+                  img.onerror = () => {
+                    setImageError('Could not read image file. Please choose a valid image.');
+                    setForm((p) => ({ ...p, imageUrl: '', imageWidth: 0, imageHeight: 0 }));
+                  };
+                  img.src = String(reader.result || '');
+                };
+                reader.onerror = () => {
+                  setImageError('Could not read image file. Please try another file.');
+                };
+                reader.readAsDataURL(file);
+              }}
+            />
+            <p className="mt-1 text-xs text-gray-600">
+              Required for <strong>{(REQUIRED_IMAGE_DIMS[form.position] || REQUIRED_IMAGE_DIMS.top).label}</strong>:
+              {' '}
+              {(REQUIRED_IMAGE_DIMS[form.position] || REQUIRED_IMAGE_DIMS.top).width}x
+              {(REQUIRED_IMAGE_DIMS[form.position] || REQUIRED_IMAGE_DIMS.top).height}px
+            </p>
+            {form.imageUrl && !imageError && (
+              <p className="mt-1 text-xs text-green-700">
+                Image ready ({form.imageWidth}x{form.imageHeight}px)
+              </p>
+            )}
+            {imageError && <p className="mt-1 text-xs text-red-700">{imageError}</p>}
+          </div>
           <input
             className="border rounded px-3 py-2"
             placeholder="Category"
@@ -208,7 +277,11 @@ export default function VendorAdsPage() {
           <select
             className="border rounded px-3 py-2"
             value={form.position}
-            onChange={(e) => setForm((p) => ({ ...p, position: e.target.value }))}
+            onChange={(e) => {
+              const position = e.target.value;
+              setImageError('');
+              setForm((p) => ({ ...p, position, imageUrl: '', imageWidth: 0, imageHeight: 0 }));
+            }}
           >
             <option value="top">top</option>
             <option value="sidebar">sidebar</option>

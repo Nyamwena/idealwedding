@@ -10,6 +10,18 @@ import {
   ensureAdFundsWallet,
 } from '@/lib/vendorAdFunds';
 
+const REQUIRED_IMAGE_DIMS: Record<string, { width: number; height: number }> = {
+  top: { width: 1200, height: 300 },
+  sidebar: { width: 400, height: 600 },
+  bottom: { width: 1200, height: 280 },
+  popup: { width: 800, height: 800 },
+};
+
+function getRequiredImageDims(position: unknown): { width: number; height: number } {
+  const key = String(position || 'top').toLowerCase();
+  return REQUIRED_IMAGE_DIMS[key] || REQUIRED_IMAGE_DIMS.top;
+}
+
 function readAdvertisements() {
   return readDataFile<any>('advertisements.json', { bannerAds: [], adSenseConfig: {} });
 }
@@ -102,6 +114,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Unauthorized vendor access' }, { status: 401 });
     }
     const body = await request.json();
+    const position = String(body.position || 'top');
     const bidPerClick = Number(body.bidPerClick || 0);
     const maxDailyBudget = Number(body.maxDailyBudget || 0);
     if (!body.title || !body.targetUrl || bidPerClick <= 0) {
@@ -115,6 +128,25 @@ export async function POST(request: NextRequest) {
         {
           success: false,
           error: 'Daily budget must be set and at least equal to your bid per click.',
+        },
+        { status: 400 },
+      );
+    }
+    const imageUrl = String(body.imageUrl || '').trim();
+    const imageWidth = Number(body.imageWidth || 0);
+    const imageHeight = Number(body.imageHeight || 0);
+    const required = getRequiredImageDims(position);
+    if (!imageUrl) {
+      return NextResponse.json(
+        { success: false, error: 'Advertisement image is required.' },
+        { status: 400 },
+      );
+    }
+    if (imageWidth !== required.width || imageHeight !== required.height) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Invalid image dimensions for ${position}. Required: ${required.width}x${required.height}px.`,
         },
         { status: 400 },
       );
@@ -141,9 +173,11 @@ export async function POST(request: NextRequest) {
     const ad = {
       id: `ad_${Date.now()}`,
       title: String(body.title),
-      imageUrl: String(body.imageUrl || ''),
+      imageUrl,
+      imageWidth,
+      imageHeight,
       targetUrl: String(body.targetUrl),
-      position: body.position || 'top',
+      position,
       status: 'pending_review',
       startDate: body.startDate || new Date().toISOString().slice(0, 10),
       endDate: body.endDate || '',
@@ -212,6 +246,10 @@ export async function PUT(request: NextRequest) {
     const nextImg = body.imageUrl !== undefined ? String(body.imageUrl) : String(currentRow.imageUrl || '');
     const nextCat = body.category !== undefined ? String(body.category) : currentRow.category;
     const nextPos = body.position !== undefined ? String(body.position) : currentRow.position;
+    const nextImageWidth =
+      body.imageWidth !== undefined ? Number(body.imageWidth || 0) : Number(currentRow.imageWidth || 0);
+    const nextImageHeight =
+      body.imageHeight !== undefined ? Number(body.imageHeight || 0) : Number(currentRow.imageHeight || 0);
 
     if (nextBid <= 0) {
       return NextResponse.json({ success: false, error: 'bidPerClick must be positive' }, { status: 400 });
@@ -221,6 +259,22 @@ export async function PUT(request: NextRequest) {
         {
           success: false,
           error: 'Daily budget must be at least equal to your bid per click.',
+        },
+        { status: 400 },
+      );
+    }
+    const required = getRequiredImageDims(nextPos);
+    if (!nextImg) {
+      return NextResponse.json(
+        { success: false, error: 'Advertisement image is required.' },
+        { status: 400 },
+      );
+    }
+    if (nextImageWidth !== required.width || nextImageHeight !== required.height) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Invalid image dimensions for ${nextPos}. Required: ${required.width}x${required.height}px.`,
         },
         { status: 400 },
       );
@@ -256,6 +310,8 @@ export async function PUT(request: NextRequest) {
       title: nextTitle,
       targetUrl: nextUrl,
       imageUrl: nextImg,
+      imageWidth: nextImageWidth,
+      imageHeight: nextImageHeight,
       category: nextCat,
       position: nextPos,
       status: nextStatus,

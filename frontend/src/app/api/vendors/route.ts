@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readDataFile } from '@/lib/dataFileStore';
+import { getVendorCategories, vendorMatchesCategoryFilter } from '@/lib/vendorCategories';
 
 // Helper to read vendors from file
 const getVendors = () => {
@@ -32,14 +33,18 @@ export async function GET(request: NextRequest) {
 
     // Merge vendor data with profile data
     const vendorsWithProfiles = approvedVendors.map((vendor: any) => {
-      const profile = vendorProfiles.find((p: any) => p.id === vendor.id);
-      
+      const profile =
+        vendorProfiles.find((p: any) => p.id === vendor.id) ||
+        vendorProfiles.find((p: any) => String(p.userId || '') === String(vendor.id).replace(/^vendor_/i, ''));
+      const categories = getVendorCategories(vendor, profile);
+
       return {
         id: vendor.id,
         name: vendor.name,
         businessName: profile?.businessName || vendor.name,
         email: vendor.email,
-        category: vendor.category,
+        category: categories[0] || vendor.category || '',
+        categories,
         location: vendor.location,
         rating: vendor.rating,
         reviewCount: Math.floor(Math.random() * 100) + 20, // Mock review count
@@ -50,7 +55,7 @@ export async function GET(request: NextRequest) {
         phone: profile?.contactInfo?.phone || vendor.phone,
         website: profile?.contactInfo?.website || vendor.website,
         languages: profile?.businessInfo?.languages || ['English'],
-        specialties: profile?.serviceCategories || [vendor.category],
+        specialties: categories,
         availability: ['Weekends', 'Evenings'], // Mock availability
         portfolio: profile?.portfolio?.filter((p: any) => p.isPublic) || [],
         services: profile?.services || [],
@@ -80,9 +85,8 @@ export async function GET(request: NextRequest) {
     let filteredVendors = vendorsWithProfiles;
 
     if (category) {
-      filteredVendors = filteredVendors.filter((vendor: any) => 
-        vendor.category.toLowerCase() === category.toLowerCase() ||
-        vendor.specialties.some((s: string) => s.toLowerCase().includes(category.toLowerCase()))
+      filteredVendors = filteredVendors.filter((vendor: any) =>
+        vendorMatchesCategoryFilter(vendor.categories || vendor.specialties || vendor.category, category),
       );
     }
 

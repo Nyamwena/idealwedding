@@ -1,15 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getVendorSession } from '@/lib/vendorSession';
+import { requireApprovedVendor } from '@/lib/requireApprovedVendor';
 import { ensureAdFundsWallet } from '@/lib/vendorAdFunds';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getVendorSession(request);
-    if (!session) {
-      return NextResponse.json({ success: false, error: 'Unauthorized vendor access' }, { status: 401 });
-    }
+    const auth = await requireApprovedVendor(request);
+    if (!auth.ok) return auth.response;
+    const session = auth.session;
     const { rows, index } = await ensureAdFundsWallet(session);
     const w = rows[index];
     return NextResponse.json({

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readDataFile, writeDataFile } from '@/lib/dataFileStore';
-import { getVendorSession } from '@/lib/vendorSession';
+import { requireApprovedVendor } from '@/lib/requireApprovedVendor';
 import { findVendorProfile, findVendorProfileIndex } from '@/lib/vendorProfileScope';
 
 export const dynamic = 'force-dynamic';
@@ -28,10 +28,9 @@ function testimonialToReview(t: any, businessName: string) {
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getVendorSession(request);
-    if (!session) {
-      return NextResponse.json({ success: false, error: 'Unauthorized vendor access' }, { status: 401 });
-    }
+    const auth = await requireApprovedVendor(request);
+    if (!auth.ok) return auth.response;
+    const session = auth.session;
 
     const profiles = await readDataFile<any[]>('vendor-profiles.json', []);
     const profile = findVendorProfile(profiles, session);
@@ -51,10 +50,9 @@ export async function GET(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    const session = await getVendorSession(request);
-    if (!session) {
-      return NextResponse.json({ success: false, error: 'Unauthorized vendor access' }, { status: 401 });
-    }
+    const auth = await requireApprovedVendor(request);
+    if (!auth.ok) return auth.response;
+    const session = auth.session;
 
     const body = await request.json();
     const testimonialId = String(body.testimonialId || body.id || '');

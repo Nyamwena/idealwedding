@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readDataFile, writeDataFile } from '@/lib/dataFileStore';
-import { getVendorSession } from '@/lib/vendorSession';
+import { requireApprovedVendor } from '@/lib/requireApprovedVendor';
 import { findVendorBySessionEmail, bookingBelongsToVendor } from '@/lib/vendorLeadScope';
 
 function readBookings() {
@@ -19,13 +19,9 @@ export async function PATCH(
   { params }: { params: { id: string } },
 ) {
   try {
-    const session = await getVendorSession(request);
-    if (!session?.userId) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized vendor access' },
-        { status: 401 },
-      );
-    }
+    const auth = await requireApprovedVendor(request);
+    if (!auth.ok) return auth.response;
+    const session = auth.session;
 
     const bookingId = String(params.id || '').trim();
     if (!bookingId) {

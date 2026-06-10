@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readDataFile, writeDataFile } from '@/lib/dataFileStore';
-import { getVendorSession } from '@/lib/vendorSession';
+import { requireApprovedVendor } from '@/lib/requireApprovedVendor';
 import { createDefaultProfileForVendor } from '@/lib/vendorProfileDefaults';
 import { findVendorProfile, findVendorProfileIndex } from '@/lib/vendorProfileScope';
 
@@ -68,10 +68,9 @@ function mapProfileAvailability(a: any, idx: number) {
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getVendorSession(request);
-    if (!session) {
-      return NextResponse.json({ success: false, error: 'Unauthorized vendor access' }, { status: 401 });
-    }
+    const auth = await requireApprovedVendor(request);
+    if (!auth.ok) return auth.response;
+    const session = auth.session;
 
     const bookings = await readDataFile<any[]>('bookings.json', []);
     const scopedBookings = bookings.filter(
@@ -111,10 +110,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getVendorSession(request);
-    if (!session) {
-      return NextResponse.json({ success: false, error: 'Unauthorized vendor access' }, { status: 401 });
-    }
+    const auth = await requireApprovedVendor(request);
+    if (!auth.ok) return auth.response;
+    const session = auth.session;
 
     const body = await request.json();
     const type = String(body.type || '');

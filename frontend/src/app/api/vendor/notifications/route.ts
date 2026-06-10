@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readDataFile } from '@/lib/dataFileStore';
-import { getVendorSession } from '@/lib/vendorSession';
+import { requireApprovedVendor } from '@/lib/requireApprovedVendor';
+import type { VendorSession } from '@/lib/vendorSession';
 import { findVendorBySessionEmail, leadBelongsToVendor } from '@/lib/vendorLeadScope';
 import {
   appendVendorNotification,
@@ -10,7 +11,7 @@ import {
   type StoredVendorNotification,
 } from '@/lib/vendorNotificationsStore';
 
-async function readLeadsScoped(session: NonNullable<Awaited<ReturnType<typeof getVendorSession>>>) {
+async function readLeadsScoped(session: VendorSession) {
   const [leads, vendors] = await Promise.all([
     readDataFile<any[]>('vendor-leads.json', []),
     readDataFile<any[]>('vendors.json', []),
@@ -19,7 +20,7 @@ async function readLeadsScoped(session: NonNullable<Awaited<ReturnType<typeof ge
   return leads.filter((lead: any) => leadBelongsToVendor(lead, session, catalog));
 }
 
-async function syncLeadNotifications(session: NonNullable<Awaited<ReturnType<typeof getVendorSession>>>) {
+async function syncLeadNotifications(session: VendorSession) {
   const [all, leads] = await Promise.all([readVendorNotifications(), readLeadsScoped(session)]);
   const scoped = scopeNotificationsForVendor(all, session);
   const refs = new Set(scoped.map((n) => n.refId).filter(Boolean) as string[]);
@@ -52,10 +53,9 @@ async function syncLeadNotifications(session: NonNullable<Awaited<ReturnType<typ
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getVendorSession(request);
-    if (!session) {
-      return NextResponse.json({ success: false, error: 'Unauthorized vendor access' }, { status: 401 });
-    }
+    const auth = await requireApprovedVendor(request);
+    if (!auth.ok) return auth.response;
+    const session = auth.session;
     await syncLeadNotifications(session);
     const all = await readVendorNotifications();
     const list = scopeNotificationsForVendor(all, session).sort(
@@ -87,10 +87,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getVendorSession(request);
-    if (!session) {
-      return NextResponse.json({ success: false, error: 'Unauthorized vendor access' }, { status: 401 });
-    }
+    const auth = await requireApprovedVendor(request);
+    if (!auth.ok) return auth.response;
+    const session = auth.session;
     const body = await request.json();
     const type = (body.type || 'system') as StoredVendorNotification['type'];
     const title = String(body.title || 'Notification');
@@ -116,10 +115,9 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    const session = await getVendorSession(request);
-    if (!session) {
-      return NextResponse.json({ success: false, error: 'Unauthorized vendor access' }, { status: 401 });
-    }
+    const auth = await requireApprovedVendor(request);
+    if (!auth.ok) return auth.response;
+    const session = auth.session;
     const body = await request.json();
     const action = String(body.action || '');
     const all = await readVendorNotifications();

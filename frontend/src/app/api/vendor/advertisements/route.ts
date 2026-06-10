@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readDataFile, writeDataFile } from '@/lib/dataFileStore';
-import { getVendorSession } from '@/lib/vendorSession';
+import { requireApprovedVendor } from '@/lib/requireApprovedVendor';
 import { findVendorProfile } from '@/lib/vendorProfileScope';
 import { adVisibleToVendor, adBelongsToVendor, legacyAdMatchesVendorProfile } from '@/lib/vendorAdScope';
 import {
@@ -42,10 +42,9 @@ function dayKey(input: string | Date) {
 
 export async function GET(request: NextRequest) {
   try {
-    const identity = await getVendorSession(request);
-    if (!identity) {
-      return NextResponse.json({ success: false, error: 'Unauthorized vendor access' }, { status: 401 });
-    }
+    const auth = await requireApprovedVendor(request);
+    if (!auth.ok) return auth.response;
+    const identity = auth.session;
     const [adsStore, clickEvents, profiles] = await Promise.all([
       readAdvertisements(),
       readClickEvents(),
@@ -109,10 +108,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const identity = await getVendorSession(request);
-    if (!identity) {
-      return NextResponse.json({ success: false, error: 'Unauthorized vendor access' }, { status: 401 });
-    }
+    const auth = await requireApprovedVendor(request);
+    if (!auth.ok) return auth.response;
+    const identity = auth.session;
     const body = await request.json();
     const position = String(body.position || 'top');
     const bidPerClick = Number(body.bidPerClick || 0);
@@ -208,10 +206,9 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    const identity = await getVendorSession(request);
-    if (!identity) {
-      return NextResponse.json({ success: false, error: 'Unauthorized vendor access' }, { status: 401 });
-    }
+    const auth = await requireApprovedVendor(request);
+    if (!auth.ok) return auth.response;
+    const identity = auth.session;
     const body = await request.json();
     const adId = String(body.id || '');
     if (!adId) {

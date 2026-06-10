@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readDataFile } from '@/lib/dataFileStore';
-import { getVendorSession } from '@/lib/vendorSession';
+import { requireApprovedVendor } from '@/lib/requireApprovedVendor';
 import { findVendorBySessionEmail, leadBelongsToVendor, bookingBelongsToVendor } from '@/lib/vendorLeadScope';
 import { findVendorProfile } from '@/lib/vendorProfileScope';
 
@@ -50,14 +50,10 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const period = searchParams.get('period') || '30d';
-    const session = await getVendorSession(request);
-    const vendorUserId = session?.userId;
-    if (!vendorUserId) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized vendor access' },
-        { status: 401 }
-      );
-    }
+    const auth = await requireApprovedVendor(request);
+    if (!auth.ok) return auth.response;
+    const session = auth.session;
+    const vendorUserId = session.userId;
 
     const vendorId = session!.vendorId;
 

@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readDataFile, writeDataFile } from '@/lib/dataFileStore';
-import { getVendorSession } from '@/lib/vendorSession';
+import { requireApprovedVendor } from '@/lib/requireApprovedVendor';
 import { createDefaultProfileForVendor } from '@/lib/vendorProfileDefaults';
 import { findVendorProfileIndex, findVendorProfile } from '@/lib/vendorProfileScope';
 import { findVendorBySessionEmail } from '@/lib/vendorLeadScope';
-import { mergeProfileCategories } from '@/lib/vendorCategories';
+import { getVendorCategories } from '@/lib/vendorCategories';
 import { resolveVendorProfileApproval } from '@/lib/vendorApprovalSync';
 
 async function readProfiles() {
@@ -47,26 +47,21 @@ async function syncVendorCatalogCategories(
 
 export async function GET(request: NextRequest) {
     try {
-        const session = await getVendorSession(request);
-        if (!session) {
-            return NextResponse.json(
-                { success: false, error: 'Unauthorized vendor access' },
-                { status: 401 },
-            );
-        }
+        const auth = await requireApprovedVendor(request);
+        if (!auth.ok) return auth.response;
+        const session = auth.session;
 
         const data = await readProfiles();
         let profile = findVendorProfile(data, session);
+
+        const vendors = await readDataFile<any[]>('vendors.json', []);
+        const catalogVendor = findVendorBySessionEmail(vendors, session);
 
         if (!profile) {
             profile = createDefaultProfileForVendor(session.userId, session.email);
             data.push(profile);
             await writeDataFile('vendor-profiles.json', data);
         } else {
-            profile = {
-                ...profile,
-                serviceCategories: mergeProfileCategories(profile),
-            };
             const idx = findVendorProfileIndex(data, session);
             if (idx >= 0 && String(data[idx].userId || '') !== session.userId) {
                 data[idx] = { ...data[idx], userId: session.userId };
@@ -74,6 +69,12 @@ export async function GET(request: NextRequest) {
                 await writeDataFile('vendor-profiles.json', data);
             }
         }
+
+        const serviceCategories = getVendorCategories(catalogVendor, profile);
+        profile = {
+            ...profile,
+            serviceCategories,
+        };
 
         profile = await resolveVendorProfileApproval(session, profile, data);
 
@@ -89,13 +90,9 @@ export async function GET(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
     try {
-        const session = await getVendorSession(request);
-        if (!session) {
-            return NextResponse.json(
-                { success: false, error: 'Unauthorized vendor access' },
-                { status: 401 },
-            );
-        }
+        const auth = await requireApprovedVendor(request);
+        if (!auth.ok) return auth.response;
+        const session = auth.session;
 
         const body = (await request.json()) as Record<string, unknown>;
         const safePatch = stripVendorIdentityFromBody(body);
@@ -108,7 +105,13 @@ export async function PUT(request: NextRequest) {
             ...current,
             ...safePatch,
         };
-        const serviceCategories = mergeProfileCategories(merged);
+        const vendors = await readDataFile<any[]>('vendors.json', []);
+        const catalogVendor = findVendorBySessionEmail(vendors, {
+            userId: session.userId,
+            email: session.email,
+            vendorId: session.vendorId,
+        });
+        const serviceCategories = getVendorCategories(catalogVendor, merged);
 
         const updated = {
             ...merged,

@@ -62,6 +62,22 @@ export function mergeProfileCategories(profile: {
   return normalizeCategoryList([...explicit, ...fromServices]);
 }
 
+/** Options for service/portfolio category dropdowns (profile picks first, then catalog list). */
+export function getServiceCategorySelectOptions(profile?: {
+  serviceCategories?: unknown;
+  services?: Array<{ category?: string }>;
+}): string[] {
+  const fromProfile = normalizeCategoryList(profile?.serviceCategories);
+  const fromServices = normalizeCategoryList(
+    (profile?.services || []).map((s) => s?.category).filter(Boolean),
+  );
+  return normalizeCategoryList([
+    ...fromProfile,
+    ...fromServices,
+    ...VENDOR_CATEGORY_OPTIONS,
+  ]);
+}
+
 export function vendorMatchesCategoryFilter(
   vendorCategories: string[] | string,
   filter: string,

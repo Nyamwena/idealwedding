@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readDataFile, writeDataFile } from '@/lib/dataFileStore';
-import { getVendorSession } from '@/lib/vendorSession';
+import { requireApprovedVendor } from '@/lib/requireApprovedVendor';
 import { appendVendorNotification } from '@/lib/vendorNotificationsStore';
 import { findVendorBySessionEmail, leadBelongsToVendor } from '@/lib/vendorLeadScope';
 import { settleOutstandingLeadCredits } from '@/lib/vendorLeadCreditSettlement';
@@ -36,14 +36,10 @@ async function writeVendors(vendors: any[]) {
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getVendorSession(request);
-    const vendorUserId = session?.userId;
-    if (!vendorUserId) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized vendor access' },
-        { status: 401 }
-      );
-    }
+    const auth = await requireApprovedVendor(request);
+    if (!auth.ok) return auth.response;
+    const session = auth.session;
+    const vendorUserId = session.userId;
 
     const vendors = await readVendors();
     const catalogVendor = findVendorBySessionEmail(vendors, session);
@@ -66,14 +62,10 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getVendorSession(request);
-    const vendorUserId = session?.userId;
-    if (!vendorUserId) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized vendor access' },
-        { status: 401 }
-      );
-    }
+    const auth = await requireApprovedVendor(request);
+    if (!auth.ok) return auth.response;
+    const session = auth.session;
+    const vendorUserId = session.userId;
 
     const body = await request.json();
     const data = await readLeads();
@@ -81,7 +73,7 @@ export async function POST(request: NextRequest) {
       typeof body.creditsUsed === 'number' && body.creditsUsed > 0 ? body.creditsUsed : 5;
 
     const wallets = await readWallets();
-    const vendorId = session!.vendorId;
+    const vendorId = session.vendorId;
     let walletIndex = wallets.findIndex(
       (w: any) =>
         String(w.vendorUserId || '') === vendorUserId ||
@@ -201,15 +193,11 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    const session = await getVendorSession(request);
-    const vendorUserId = session?.userId;
-    const vendorId = session?.vendorId;
-    if (!vendorUserId || !vendorId) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized vendor access' },
-        { status: 401 }
-      );
-    }
+    const auth = await requireApprovedVendor(request);
+    if (!auth.ok) return auth.response;
+    const session = auth.session;
+    const vendorUserId = session.userId;
+    const vendorId = session.vendorId;
 
     const body = await request.json();
     const { leadId, status } = body;

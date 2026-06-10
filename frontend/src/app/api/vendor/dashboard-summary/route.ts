@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readDataFile } from '@/lib/dataFileStore';
-import { getVendorSession } from '@/lib/vendorSession';
+import { requireApprovedVendor } from '@/lib/requireApprovedVendor';
 import { findVendorBySessionEmail, leadBelongsToVendor } from '@/lib/vendorLeadScope';
 import { findVendorProfile } from '@/lib/vendorProfileScope';
 
@@ -12,10 +12,9 @@ function matchesVendor(r: any, userId: string, vendorId: string) {
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getVendorSession(request);
-    if (!session) {
-      return NextResponse.json({ success: false, error: 'Unauthorized vendor access' }, { status: 401 });
-    }
+    const auth = await requireApprovedVendor(request);
+    if (!auth.ok) return auth.response;
+    const session = auth.session;
     const { userId, vendorId } = session;
 
     const [bookings, payments, leads, quotes, profiles, vendors] = await Promise.all([

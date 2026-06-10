@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { useVendorProfile } from '@/hooks/useVendorProfile';
+import { getServiceCategorySelectOptions } from '@/lib/vendorCategories';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 import { AdminBreadcrumb } from '@/components/admin/AdminBreadcrumb';
@@ -106,7 +107,23 @@ export default function VendorServicesPage() {
     }
   };
 
+  const categoryOptions = getServiceCategorySelectOptions(profile ?? undefined);
+  const serviceCategories = profile?.serviceCategories ?? [];
 
+  const categorySelect = (
+    <select
+      value={newService.category}
+      onChange={(e) => setNewService({ ...newService, category: e.target.value })}
+      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+    >
+      <option value="">Select category</option>
+      {categoryOptions.map((category) => (
+        <option key={category} value={category}>
+          {category}
+        </option>
+      ))}
+    </select>
+  );
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-secondary-50">
       <Header />
@@ -138,6 +155,25 @@ export default function VendorServicesPage() {
             </Link>
           </div>
         </div>
+
+        {serviceCategories.length > 0 && (
+          <div className="mb-6 rounded-2xl border border-primary-100 bg-white p-6 shadow-sm">
+            <h2 className="text-lg font-semibold text-gray-900">Your service categories</h2>
+            <p className="mt-1 text-sm text-gray-600">
+              Categories assigned to your vendor profile. Add a service under each category you offer.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {serviceCategories.map((category) => (
+                <span
+                  key={category}
+                  className="inline-block rounded-full bg-primary-100 px-3 py-1 text-sm font-medium text-primary-800"
+                >
+                  {category}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Services List */}
         <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
@@ -220,20 +256,7 @@ export default function VendorServicesPage() {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700">Category</label>
-                      <select
-                        value={newService.category}
-                        onChange={(e) => setNewService({...newService, category: e.target.value})}
-                        className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
-                      >
-                        <option value="">Select category</option>
-                        <option value="Photography">Photography</option>
-                        <option value="Videography">Videography</option>
-                        <option value="Wedding Planning">Wedding Planning</option>
-                        <option value="Catering">Catering</option>
-                        <option value="Floral">Floral</option>
-                        <option value="Music & Entertainment">Music & Entertainment</option>
-                        <option value="Venues">Venues</option>
-                      </select>
+                      {categorySelect}
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700">Description</label>
@@ -328,20 +351,7 @@ export default function VendorServicesPage() {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700">Category</label>
-                      <select
-                        value={newService.category}
-                        onChange={(e) => setNewService({...newService, category: e.target.value})}
-                        className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
-                      >
-                        <option value="">Select category</option>
-                        <option value="Photography">Photography</option>
-                        <option value="Videography">Videography</option>
-                        <option value="Wedding Planning">Wedding Planning</option>
-                        <option value="Catering">Catering</option>
-                        <option value="Floral">Floral</option>
-                        <option value="Music & Entertainment">Music & Entertainment</option>
-                        <option value="Venues">Venues</option>
-                      </select>
+                      {categorySelect}
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700">Description</label>

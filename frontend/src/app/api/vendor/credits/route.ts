@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readDataFile, writeDataFile } from '@/lib/dataFileStore';
-import { getVendorSession } from '@/lib/vendorSession';
+import { requireApprovedVendor } from '@/lib/requireApprovedVendor';
 import { newVendorWalletBalanceFields } from '@/lib/vendorWalletStarter';
 
 type CreditWallet = {
@@ -114,10 +114,9 @@ async function syncVendorCredits(identity: { email: string; vendorId: string }, 
 
 export async function GET(request: NextRequest) {
   try {
-    const identity = await getVendorSession(request);
-    if (!identity) {
-      return NextResponse.json({ success: false, error: 'Unauthorized vendor access' }, { status: 401 });
-    }
+    const auth = await requireApprovedVendor(request);
+    if (!auth.ok) return auth.response;
+    const identity = auth.session;
 
     const wallets = await readWallets();
     const { wallet } = ensureWallet(wallets, identity);
@@ -153,10 +152,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const identity = await getVendorSession(request);
-    if (!identity) {
-      return NextResponse.json({ success: false, error: 'Unauthorized vendor access' }, { status: 401 });
-    }
+    const auth = await requireApprovedVendor(request);
+    if (!auth.ok) return auth.response;
+    const identity = auth.session;
 
     const body = await request.json();
     const action = String(body.action || '').toLowerCase();

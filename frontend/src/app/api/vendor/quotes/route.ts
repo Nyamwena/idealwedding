@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readDataFile } from '@/lib/dataFileStore';
-import { getVendorSession } from '@/lib/vendorSession';
+import { requireApprovedVendor } from '@/lib/requireApprovedVendor';
 import { findVendorBySessionEmail, leadBelongsToVendor } from '@/lib/vendorLeadScope';
 import { readQuotesArray, writeQuotesArray, readQuoteRequestsArray } from '@/lib/quotesData';
+import { settleQuoteCredits } from '@/lib/vendorCreditDeduction';
 
 function readLeads() {
   return readDataFile<any[]>('vendor-leads.json', []);
@@ -10,18 +11,14 @@ function readLeads() {
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getVendorSession(request);
-    const vendorUserId = session?.userId;
-    if (!vendorUserId) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized vendor access' },
-        { status: 401 }
-      );
-    }
+    const auth = await requireApprovedVendor(request);
+    if (!auth.ok) return auth.response;
+    const session = auth.session;
+    const vendorUserId = session.userId;
 
     const [quotes, vendors] = await Promise.all([readQuotesArray(), readDataFile<any[]>('vendors.json', [])]);
-    const catalogVendor = findVendorBySessionEmail(vendors, session!);
-    const scoped = quotes.filter((q: any) => leadBelongsToVendor(q, session!, catalogVendor));
+    const catalogVendor = findVendorBySessionEmail(vendors, session);
+    const scoped = quotes.filter((q: any) => leadBelongsToVendor(q, session, catalogVendor));
 
     return NextResponse.json({ success: true, data: scoped });
   } catch (error) {
@@ -35,14 +32,10 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getVendorSession(request);
-    const vendorUserId = session?.userId;
-    if (!vendorUserId) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized vendor access' },
-        { status: 401 }
-      );
-    }
+    const auth = await requireApprovedVendor(request);
+    if (!auth.ok) return auth.response;
+    const session = auth.session;
+    const vendorUserId = session.userId;
 
     const body = await request.json();
     const quoteRequestId = String(body?.quoteRequestId || '').trim();
@@ -63,7 +56,7 @@ export async function POST(request: NextRequest) {
       readDataFile<any[]>('vendors.json', []),
       readQuoteRequestsArray(),
     ]);
-    const catalogVendor = findVendorBySessionEmail(vendors, session!);
+    const catalogVendor = findVendorBySessionEmail(vendors, session);
 
     let lead: any = null;
     let fromRequest: any = null;
@@ -109,7 +102,7 @@ export async function POST(request: NextRequest) {
       serviceCategory: fromRequest?.category || lead?.serviceCategory,
       eventDate: lead?.weddingDate || fromRequest?.eventDate || '',
       location: lead?.location || fromRequest?.location || '',
-      status: fromRequest ? 'sent' : 'draft',
+      status: lead || fromRequest ? 'sent' : 'draft',
       amount: Number(amount),
       description,
       notes: notes || '',
@@ -120,8 +113,23 @@ export async function POST(request: NextRequest) {
     };
     if (fromRequest) {
       quote.quoteRequestId = String(fromRequest.id);
+    }
+    if (lead || fromRequest) {
       quote.sentAt = nowIso;
       quote.updatedAt = nowIso;
+    }
+
+    const sendingNow = String(quote.status || '') === 'sent';
+    if (sendingNow) {
+      const creditResult = await settleQuoteCredits(session, quote, lead);
+      if (!creditResult.ok) {
+        return NextResponse.json(
+          { success: false, error: creditResult.error },
+          { status: 400 },
+        );
+      }
+      quote.creditsSettled = true;
+      quote.creditsUsed = creditResult.creditsUsed;
     }
 
     quotes.push(quote);

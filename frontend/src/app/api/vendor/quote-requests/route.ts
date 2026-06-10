@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getVendorSession } from '@/lib/vendorSession';
+import { requireApprovedVendor } from '@/lib/requireApprovedVendor';
 import { readDataFile } from '@/lib/dataFileStore';
 import { findVendorBySessionEmail, leadBelongsToVendor } from '@/lib/vendorLeadScope';
 import { readQuoteRequestsArray } from '@/lib/quotesData';
@@ -10,13 +10,9 @@ import { readQuoteRequestsArray } from '@/lib/quotesData';
  */
 export async function GET(request: NextRequest) {
   try {
-    const session = await getVendorSession(request);
-    if (!session?.userId) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized vendor access' },
-        { status: 401 },
-      );
-    }
+    const auth = await requireApprovedVendor(request);
+    if (!auth.ok) return auth.response;
+    const session = auth.session;
     const all = await readQuoteRequestsArray();
     const vendors = await readDataFile<any[]>('vendors.json', []);
     const catalogVendor = findVendorBySessionEmail(vendors, session);

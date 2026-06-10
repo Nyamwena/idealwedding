@@ -1,21 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readDataFile } from '@/lib/dataFileStore';
-import { getVendorSession } from '@/lib/vendorSession';
+import { requireApprovedVendor } from '@/lib/requireApprovedVendor';
 import { findVendorBySessionEmail, leadBelongsToVendor } from '@/lib/vendorLeadScope';
 import { readQuotesArray, writeQuotesArray } from '@/lib/quotesData';
+import { settleQuoteCredits } from '@/lib/vendorCreditDeduction';
+
+function readLeads() {
+  return readDataFile<any[]>('vendor-leads.json', []);
+}
 
 export async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } },
 ) {
   try {
-    const session = await getVendorSession(request);
-    if (!session?.userId) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized vendor access' },
-        { status: 401 },
-      );
-    }
+    const auth = await requireApprovedVendor(request);
+    if (!auth.ok) return auth.response;
+    const session = auth.session;
 
     const quoteId = String(params.id || '').trim();
     if (!quoteId) {
@@ -51,12 +52,34 @@ export async function PATCH(
 
     const current = { ...quotes[idx] };
     const nowIso = new Date().toISOString();
-
     if (String(current.status || '').toLowerCase() === 'accepted') {
       return NextResponse.json(
         { success: false, error: 'This quotation was accepted; it cannot be edited here' },
         { status: 400 },
       );
+    }
+
+    const willSend =
+      action === 'send' ||
+      action === 'resend' ||
+      (action === 'update' && String(current.status || '') === 'draft');
+
+    if (willSend && current.creditsSettled !== true) {
+      let lead: unknown = null;
+      const leadId = String(current.leadId || '').trim();
+      if (leadId) {
+        const leads = await readLeads();
+        lead = leads.find((l: any) => l.id === leadId) ?? null;
+      }
+      const creditResult = await settleQuoteCredits(session, current, lead);
+      if (!creditResult.ok) {
+        return NextResponse.json(
+          { success: false, error: creditResult.error },
+          { status: 400 },
+        );
+      }
+      current.creditsSettled = true;
+      current.creditsUsed = creditResult.creditsUsed;
     }
 
     if (action === 'update') {
@@ -110,13 +133,9 @@ export async function DELETE(
   { params }: { params: { id: string } },
 ) {
   try {
-    const session = await getVendorSession(request);
-    if (!session?.userId) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized vendor access' },
-        { status: 401 },
-      );
-    }
+    const auth = await requireApprovedVendor(request);
+    if (!auth.ok) return auth.response;
+    const session = auth.session;
 
     const quoteId = String(params.id || '').trim();
     if (!quoteId) {

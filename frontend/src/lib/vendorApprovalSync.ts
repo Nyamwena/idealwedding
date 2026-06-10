@@ -12,6 +12,49 @@ export function catalogStatusToApproval(status: unknown): VendorApprovalStatus {
   return 'pending';
 }
 
+export type VendorCatalogApproval = {
+  approvalStatus: VendorApprovalStatus;
+  isApproved: boolean;
+  message: string;
+  hasCatalogEntry: boolean;
+};
+
+export function approvalStatusMessage(status: VendorApprovalStatus): string {
+  switch (status) {
+    case 'approved':
+      return 'Your vendor account is approved.';
+    case 'rejected':
+      return 'Your vendor application was not approved. Contact support if you believe this is an error.';
+    case 'suspended':
+      return 'Your vendor account has been suspended. Contact support for assistance.';
+    default:
+      return 'Your vendor profile is under review. You will gain access once an administrator approves your account.';
+  }
+}
+
+/** Whether the vendor catalog row allows dashboard/API access. */
+export async function getVendorCatalogApproval(
+  session: VendorSession,
+): Promise<VendorCatalogApproval> {
+  const vendors = await readDataFile<any[]>('vendors.json', []);
+  const catalogVendor = findVendorBySessionEmail(vendors, session);
+  if (!catalogVendor) {
+    return {
+      approvalStatus: 'pending',
+      isApproved: false,
+      message: approvalStatusMessage('pending'),
+      hasCatalogEntry: false,
+    };
+  }
+  const approvalStatus = catalogStatusToApproval(catalogVendor.status);
+  return {
+    approvalStatus,
+    isApproved: approvalStatus === 'approved',
+    message: approvalStatusMessage(approvalStatus),
+    hasCatalogEntry: true,
+  };
+}
+
 /** Apply admin catalog status (`vendors.json`) onto a vendor profile row. */
 export function applyCatalogApprovalToProfile(profile: any, catalogVendor: any | null | undefined) {
   if (!catalogVendor) return profile;

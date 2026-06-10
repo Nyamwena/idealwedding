@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readDataFile, writeDataFile } from '@/lib/dataFileStore';
-import { getVendorSession } from '@/lib/vendorSession';
+import { requireApprovedVendor } from '@/lib/requireApprovedVendor';
 import { createDefaultProfileForVendor } from '@/lib/vendorProfileDefaults';
 import { findVendorProfileIndex } from '@/lib/vendorProfileScope';
 
@@ -100,10 +100,9 @@ function mergeSettingsIntoProfile(profile: any, ui: VendorUiSettings) {
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getVendorSession(request);
-    if (!session) {
-      return NextResponse.json({ success: false, error: 'Unauthorized vendor access' }, { status: 401 });
-    }
+    const auth = await requireApprovedVendor(request);
+    if (!auth.ok) return auth.response;
+    const session = auth.session;
 
     const profiles = await readDataFile<any[]>('vendor-profiles.json', []);
     let profile = profiles[findVendorProfileIndex(profiles, session)];
@@ -134,10 +133,9 @@ export async function GET(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    const session = await getVendorSession(request);
-    if (!session) {
-      return NextResponse.json({ success: false, error: 'Unauthorized vendor access' }, { status: 401 });
-    }
+    const auth = await requireApprovedVendor(request);
+    if (!auth.ok) return auth.response;
+    const session = auth.session;
 
     const body = await request.json() as Partial<VendorUiSettings>;
     const profiles = await readDataFile<any[]>('vendor-profiles.json', []);

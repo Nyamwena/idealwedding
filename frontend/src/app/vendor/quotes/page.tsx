@@ -38,13 +38,6 @@ export default function VendorQuotesPage() {
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [selectedQuote, setSelectedQuote] = useState<VendorQuote | null>(null);
   const [showQuoteModal, setShowQuoteModal] = useState(false);
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [newQuote, setNewQuote] = useState({
-    leadId: '',
-    amount: '',
-    description: '',
-    notes: '',
-  });
   const [showReviseModal, setShowReviseModal] = useState(false);
   const [reviseTarget, setReviseTarget] = useState<VendorQuote | null>(null);
   const [reviseForm, setReviseForm] = useState({ amount: '', description: '', notes: '' });
@@ -96,58 +89,6 @@ export default function VendorQuotesPage() {
   const handleViewQuote = (quote: VendorQuote) => {
     setSelectedQuote(quote);
     setShowQuoteModal(true);
-  };
-
-  const handleCreateQuote = async () => {
-    try {
-      const amount = Number(newQuote.amount);
-      if (!newQuote.leadId || !newQuote.description || !Number.isFinite(amount) || amount <= 0) {
-        return;
-      }
-      const response = await fetch('/api/vendor/quotes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          leadId: newQuote.leadId,
-          amount,
-          description: newQuote.description,
-          notes: newQuote.notes || '',
-        }),
-      });
-      const result = await response.json();
-      if (!response.ok) {
-        console.error(result.error || 'Failed to create quote');
-        return;
-      }
-      const q = result.data;
-      const created: VendorQuote = {
-        id: String(q.id),
-        leadId: String(q.leadId || ''),
-        coupleName: String(q.coupleName || ''),
-        coupleEmail: String(q.coupleEmail || ''),
-        serviceType: String(q.serviceType || ''),
-        eventDate: String(q.eventDate || ''),
-        location: String(q.location || ''),
-        status: (q.status || 'draft') as VendorQuote['status'],
-        amount: Number(q.amount || 0),
-        description: String(q.description || ''),
-        notes: q.notes ? String(q.notes) : undefined,
-        createdAt: String(q.createdAt || new Date().toISOString()),
-        sentAt: q.sentAt ? String(q.sentAt) : undefined,
-        expiresAt: String(q.expiresAt || ''),
-      };
-      setQuotes((prev) => [created, ...prev]);
-      setShowCreateModal(false);
-      setNewQuote({
-        leadId: '',
-        amount: '',
-        description: '',
-        notes: '',
-      });
-    } catch (error) {
-      console.error('Failed to create quote:', error);
-    }
   };
 
   const handleSendQuote = async (quote: VendorQuote) => {
@@ -279,15 +220,9 @@ export default function VendorQuotesPage() {
         <div className="flex justify-between items-center mb-8">
           <div>
             <h1 className="text-4xl font-bold text-gray-900">Quote <span className="gradient-text">Management</span></h1>
-            <p className="text-gray-600 mt-2">Create and manage quotes for your potential clients</p>
+            <p className="text-gray-600 mt-2">Manage quotes sent from leads and open quote requests</p>
           </div>
           <div className="flex items-center space-x-4">
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="btn-primary btn-md"
-            >
-              + Create Quote
-            </button>
             <Link href="/vendor">
               <button className="btn-outline btn-md hover-lift">
                 ← Back to Dashboard
@@ -509,8 +444,8 @@ export default function VendorQuotesPage() {
                   <span className="text-6xl mb-4 block">💬</span>
                   <h3 className="text-lg font-medium text-gray-900 mb-2">No quotes found</h3>
                   <p className="text-gray-600">
-                    {selectedStatus === 'all' 
-                      ? "You haven't created any quotes yet." 
+                    {selectedStatus === 'all'
+                      ? 'No quotes yet. Respond to leads or open quote requests to send quotations.'
                       : `No ${selectedStatus} quotes found.`}
                   </p>
                 </div>
@@ -690,88 +625,6 @@ export default function VendorQuotesPage() {
           </div>
         )}
 
-        {showCreateModal && (
-          <div className="fixed inset-0 z-50 overflow-y-auto">
-            <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-              <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"></div>
-              <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
-                <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                  <div className="sm:flex sm:items-start">
-                    <div className="mt-3 text-center sm:mt-0 sm:text-left w-full">
-                      <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
-                        Create New Quote
-                      </h3>
-                      
-                      <div className="space-y-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700">Lead ID</label>
-                          <input
-                            type="text"
-                            value={newQuote.leadId}
-                            onChange={(e) => setNewQuote({...newQuote, leadId: e.target.value})}
-                            className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
-                            placeholder="Enter lead ID"
-                          />
-                        </div>
-                        
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700">Quote Amount ($)</label>
-                          <input
-                            type="number"
-                            value={newQuote.amount}
-                            onChange={(e) => setNewQuote({...newQuote, amount: e.target.value})}
-                            className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
-                            placeholder="Enter quote amount"
-                          />
-                        </div>
-                        
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700">Description</label>
-                          <textarea
-                            value={newQuote.description}
-                            onChange={(e) => setNewQuote({...newQuote, description: e.target.value})}
-                            rows={3}
-                            className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
-                            placeholder="Describe the services included in this quote"
-                          />
-                        </div>
-                        
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700">Notes (Optional)</label>
-                          <textarea
-                            value={newQuote.notes}
-                            onChange={(e) => setNewQuote({...newQuote, notes: e.target.value})}
-                            rows={2}
-                            className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
-                            placeholder="Additional notes or terms"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="bg-gray-50 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6">
-                  <div className="flex space-x-2">
-                    <button
-                      onClick={handleCreateQuote}
-                      className="btn-primary btn-sm"
-                    >
-                      Create Quote
-                    </button>
-                    <button
-                      type="button"
-                      className="btn-outline btn-sm"
-                      onClick={() => setShowCreateModal(false)}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
       </main>
       
       <Footer />
